@@ -1,0 +1,13 @@
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+
+# Backups
+backup-*.db
+backups/
