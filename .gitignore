@@ -11,3 +11,6 @@ venv/
 # Backups
 backup-*.db
 backups/
+*.db
+*.db-shm
+*.db-wal
