@@ -1,4 +1,4 @@
-# 🐠 WaterScribe
+# 🐠 Aquarium Tracker
 
 A beautiful, feature-rich web application for tracking aquarium maintenance, water parameters, and fish inventory.
 
@@ -15,13 +15,13 @@ A beautiful, feature-rich web application for tracking aquarium maintenance, wat
 
 ```bash
 # 1. Copy all files to your Linux server
-scp -r * user@your-server:~/waterscribe/
+scp -r * user@your-server:~/aquarium-tracker/
 
 # 2. SSH into your server
 ssh user@your-server
 
 # 3. Navigate to directory
-cd ~/waterscribe
+cd ~/aquarium-tracker
 
 # 4. Run the installer
 chmod +x install.sh
@@ -45,7 +45,7 @@ sudo apt install python3 python3-pip python3-venv -y
 
 ### Install
 ```bash
-cd ~/waterscribe
+cd ~/aquarium-tracker
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -60,8 +60,8 @@ Visit `http://your-server-ip:5000`
 - `templates/index.html` - Frontend interface
 - `requirements.txt` - Python dependencies
 - `install.sh` - Automated installation script
-- `waterscribe.service` - Systemd service file
-- `nginx-waterscribe.conf` - Nginx configuration
+- `aquarium-tracker.service` - Systemd service file
+- `nginx-aquarium-tracker.conf` - Nginx configuration
 - `SETUP_GUIDE.md` - Detailed setup instructions
 
 ## 🎨 Interface
@@ -119,26 +119,26 @@ SELECT * FROM water_parameters ORDER BY timestamp DESC LIMIT 10;
 
 ### Start/Stop Service
 ```bash
-sudo systemctl start waterscribe
-sudo systemctl stop waterscribe
-sudo systemctl restart waterscribe
+sudo systemctl start aquarium-tracker
+sudo systemctl stop aquarium-tracker
+sudo systemctl restart aquarium-tracker
 ```
 
 ### View Logs
 ```bash
-sudo journalctl -u waterscribe -f
+sudo journalctl -u aquarium-tracker -f
 ```
 
 ### Check Status
 ```bash
-sudo systemctl status waterscribe
+sudo systemctl status aquarium-tracker
 ```
 
 ## 🐛 Troubleshooting
 
 **Can't connect to app:**
 ```bash
-sudo systemctl status waterscribe
+sudo systemctl status aquarium-tracker
 sudo netstat -tlnp | grep 5000
 ```
 
@@ -150,7 +150,7 @@ chmod 664 aquarium.db
 
 **View error logs:**
 ```bash
-sudo journalctl -u waterscribe -n 100
+sudo journalctl -u aquarium-tracker -n 100
 ```
 
 ## 📱 Access

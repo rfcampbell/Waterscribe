@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WaterScribe Application
+Aquarium Tracker Application
 A Flask-based web app for tracking aquarium maintenance and parameters
 """
 
@@ -78,8 +78,8 @@ def init_db():
     conn.close()
 
 def get_db():
-    """Get database connection with proper timeout"""
-    conn = sqlite3.connect(DB_PATH, timeout=10.0)
+    """Get database connection"""
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -165,116 +165,106 @@ def maintenance():
 def scheduled():
     """Handle scheduled tasks"""
     conn = get_db()
+    c = conn.cursor()
     
-    try:
-        c = conn.cursor()
+    if request.method == 'POST':
+        data = request.json
+        is_recurring = data.get('is_recurring', True)
         
-        if request.method == 'POST':
-            data = request.json
-            is_recurring = data.get('is_recurring', True)
+        if is_recurring:
+            # Recurring task with frequency
+            next_due = datetime.now() + timedelta(days=data['frequency_days'])
+            c.execute('''
+                INSERT INTO scheduled_tasks (task_name, frequency_days, next_due, description, active, is_recurring)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                data['task_name'],
+                data['frequency_days'],
+                next_due.isoformat(),
+                data.get('description'),
+                True,
+                True
+            ))
+        else:
+            # One-time task with specific date
+            specific_date = datetime.fromisoformat(data['specific_date'])
+            c.execute('''
+                INSERT INTO scheduled_tasks (task_name, next_due, description, active, is_recurring, specific_date)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                data['task_name'],
+                specific_date.isoformat(),
+                data.get('description'),
+                True,
+                False,
+                specific_date.isoformat()
+            ))
+        
+        conn.commit()
+        task_id = c.lastrowid
+        conn.close()
+        return jsonify({'success': True, 'id': task_id})
+    
+    elif request.method == 'PUT':
+        # Complete a task and reschedule (or deactivate if one-time)
+        data = request.json
+        task_id = data['id']
+        
+        c.execute('SELECT frequency_days, is_recurring FROM scheduled_tasks WHERE id = ?', (task_id,))
+        row = c.fetchone()
+        
+        if row:
+            is_recurring = row['is_recurring']
+            now = datetime.now()
             
             if is_recurring:
-                # Recurring task with frequency
-                if not data.get('frequency_days'):
-                    return jsonify({'success': False, 'error': 'Frequency is required for recurring tasks'}), 400
+                # Recurring task - reschedule
+                frequency = row['frequency_days']
+                next_due = now + timedelta(days=frequency)
                 
-                next_due = datetime.now() + timedelta(days=data['frequency_days'])
                 c.execute('''
-                    INSERT INTO scheduled_tasks (task_name, frequency_days, next_due, description, active, is_recurring)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (
-                    data['task_name'],
-                    data['frequency_days'],
-                    next_due.isoformat(),
-                    data.get('description'),
-                    True,
-                    True
-                ))
+                    UPDATE scheduled_tasks 
+                    SET last_completed = ?, next_due = ?
+                    WHERE id = ?
+                ''', (now.isoformat(), next_due.isoformat(), task_id))
             else:
-                # One-time task with specific date
-                if not data.get('specific_date') or data['specific_date'].strip() == '':
-                    return jsonify({'success': False, 'error': 'Date is required for one-time tasks'}), 400
-                
-                try:
-                    specific_date = datetime.fromisoformat(data['specific_date'])
-                except ValueError:
-                    return jsonify({'success': False, 'error': 'Invalid date format'}), 400
-                
+                # One-time task - mark as inactive
                 c.execute('''
-                    INSERT INTO scheduled_tasks (task_name, next_due, description, active, is_recurring, specific_date)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (
-                    data['task_name'],
-                    specific_date.isoformat(),
-                    data.get('description'),
-                    True,
-                    False,
-                    specific_date.isoformat()
-                ))
+                    UPDATE scheduled_tasks 
+                    SET last_completed = ?, active = 0
+                    WHERE id = ?
+                ''', (now.isoformat(), task_id))
             
-            conn.commit()
-            task_id = c.lastrowid
-            return jsonify({'success': True, 'id': task_id})
-        
-        elif request.method == 'PUT':
-            # Complete a task and reschedule (or deactivate if one-time)
-            data = request.json
-            task_id = data['id']
-            
-            c.execute('SELECT frequency_days, is_recurring FROM scheduled_tasks WHERE id = ?', (task_id,))
-            row = c.fetchone()
-            
-            if row:
-                is_recurring = row['is_recurring']
-                now = datetime.now()
-                
-                if is_recurring:
-                    # Recurring task - reschedule
-                    frequency = row['frequency_days']
-                    next_due = now + timedelta(days=frequency)
-                    
-                    c.execute('''
-                        UPDATE scheduled_tasks 
-                        SET last_completed = ?, next_due = ?
-                        WHERE id = ?
-                    ''', (now.isoformat(), next_due.isoformat(), task_id))
-                else:
-                    # One-time task - mark as inactive
-                    c.execute('''
-                        UPDATE scheduled_tasks 
-                        SET last_completed = ?, active = 0
-                        WHERE id = ?
-                    ''', (now.isoformat(), task_id))
-                
-                # Also log to maintenance
-                c.execute('''
-                    INSERT INTO maintenance_log (task_type, description)
-                    VALUES (?, ?)
-                ''', (data.get('task_name', 'Scheduled Task'), 'Completed scheduled task'))
-                
-                conn.commit()
-            
-            return jsonify({'success': True})
-        
-        elif request.method == 'DELETE':
-            task_id = request.args.get('id', type=int)
-            c.execute('DELETE FROM scheduled_tasks WHERE id = ?', (task_id,))
-            conn.commit()
-            return jsonify({'success': True})
-        
-        else:
-            # GET: return all active scheduled tasks
+            # Also log to maintenance
             c.execute('''
-                SELECT * FROM scheduled_tasks 
-                WHERE active = 1
-                ORDER BY next_due ASC
-            ''')
+                INSERT INTO maintenance_log (task_type, description)
+                VALUES (?, ?)
+            ''', (data.get('task_name', 'Scheduled Task'), 'Completed scheduled task'))
             
-            rows = c.fetchall()
-            return jsonify([dict(row) for row in rows])
-    
-    finally:
+            conn.commit()
+        
         conn.close()
+        return jsonify({'success': True})
+    
+    elif request.method == 'DELETE':
+        task_id = request.args.get('id', type=int)
+        c.execute('DELETE FROM scheduled_tasks WHERE id = ?', (task_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+    
+    else:
+        # GET: return all active scheduled tasks
+        c.execute('''
+            SELECT * FROM scheduled_tasks 
+            WHERE active = 1
+            ORDER BY next_due ASC
+        ''')
+        
+        rows = c.fetchall()
+        conn.close()
+        
+        return jsonify([dict(row) for row in rows])
 
 @app.route('/api/fish', methods=['GET', 'POST', 'DELETE'])
 def fish():

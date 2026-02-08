@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Database Migration Script
-Adds support for one-time scheduled tasks to existing WaterScribe databases
+Adds support for one-time scheduled tasks to existing aquarium tracker databases
 """
 
 import sqlite3
@@ -13,9 +13,9 @@ db_path = Path('aquarium.db')
 
 if not db_path.exists():
     # Try alternate location
-    db_path = Path.home() / 'waterscribe' / 'aquarium.db'
+    db_path = Path.home() / 'aquarium-tracker' / 'aquarium.db'
     if not db_path.exists():
-        print("Error: Database not found at aquarium.db or ~/waterscribe/aquarium.db")
+        print("Error: Database not found at aquarium.db or ~/aquarium-tracker/aquarium.db")
         print("Please run this script from the directory containing aquarium.db")
         sys.exit(1)
 
@@ -70,7 +70,7 @@ def migrate():
         print("  - One-time tasks (specific date)")
         print()
         print("Restart your app to use the new features:")
-        print("  sudo systemctl restart waterscribe")
+        print("  sudo systemctl restart aquarium-tracker")
         print()
     else:
         print()

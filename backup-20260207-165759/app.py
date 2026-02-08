@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WaterScribe Application
+Aquarium Tracker Application
 A Flask-based web app for tracking aquarium maintenance and parameters
 """
 
