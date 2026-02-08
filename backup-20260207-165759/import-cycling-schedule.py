@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Import Cycling Schedule for 50 Gallon Tank
-This script adds all the cycling tasks and schedule to the WaterScribe
+This script adds all the cycling tasks and schedule to the aquarium tracker
 """
 
 import sqlite3
@@ -10,11 +10,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 # Find the database
-db_path = Path.home() / 'waterscribe' / 'aquarium.db'
+db_path = Path.home() / 'aquarium-tracker' / 'aquarium.db'
 
 if not db_path.exists():
     print(f"Error: Database not found at {db_path}")
-    print("Please run this script from the waterscribe directory or update the path.")
+    print("Please run this script from the aquarium-tracker directory or update the path.")
     sys.exit(1)
 
 def add_scheduled_task(conn, task_name, frequency_days, description):
@@ -144,7 +144,7 @@ def main():
     print("=" * 60)
     print()
     print("Next Steps:")
-    print("1. Open your WaterScribe in the browser")
+    print("1. Open your aquarium tracker in the browser")
     print("2. Go to the 'Schedule' tab to see all tasks")
     print("3. Go to the 'Maintenance Log' to see Day 1 setup")
     print("4. As you complete tasks, mark them complete to auto-reschedule")

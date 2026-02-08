@@ -1,6 +1,6 @@
 # 🎯 One-Time Tasks Update
 
-Your WaterScribe now supports **both recurring and one-time scheduled tasks**!
+Your aquarium tracker now supports **both recurring and one-time scheduled tasks**!
 
 ## New Features
 
@@ -21,9 +21,9 @@ Your WaterScribe now supports **both recurring and one-time scheduled tasks**!
 
 ```bash
 # Copy the new files to your server
-scp app.py rcampbell@robix:~/waterscribe/waterscribe/
-scp templates/index.html rcampbell@robix:~/waterscribe/waterscribe/templates/
-scp migrate-database.py rcampbell@robix:~/waterscribe/waterscribe/
+scp app.py rcampbell@robix:~/aquarium-tracker/aquarium-tracker/
+scp templates/index.html rcampbell@robix:~/aquarium-tracker/aquarium-tracker/templates/
+scp migrate-database.py rcampbell@robix:~/aquarium-tracker/aquarium-tracker/
 ```
 
 ### Step 2: Run Database Migration
@@ -32,8 +32,8 @@ scp migrate-database.py rcampbell@robix:~/waterscribe/waterscribe/
 # SSH to your server
 ssh rcampbell@robix
 
-# Navigate to your waterscribe directory
-cd ~/waterscribe/waterscribe
+# Navigate to your aquarium-tracker directory
+cd ~/aquarium-tracker/aquarium-tracker
 
 # Run the migration
 python3 migrate-database.py
@@ -45,10 +45,10 @@ This will add the new database columns needed for one-time tasks.
 
 ```bash
 # Restart the service
-sudo systemctl restart waterscribe
+sudo systemctl restart aquarium-tracker
 
 # Verify it's running
-sudo systemctl status waterscribe
+sudo systemctl status aquarium-tracker
 ```
 
 ## Using One-Time Tasks
@@ -115,7 +115,7 @@ Existing tasks are automatically marked as recurring.
 **Migration fails:**
 ```bash
 # Check database location
-ls -la ~/waterscribe/*/aquarium.db
+ls -la ~/aquarium-tracker/*/aquarium.db
 
 # Run migration from correct directory
 cd /path/to/directory/with/aquarium.db
@@ -125,14 +125,14 @@ python3 migrate-database.py
 **App won't start after update:**
 ```bash
 # Check logs
-sudo journalctl -u waterscribe -n 50
+sudo journalctl -u aquarium-tracker -n 50
 
 # Verify files are in place
-ls -la ~/waterscribe/waterscribe/app.py
-ls -la ~/waterscribe/waterscribe/templates/index.html
+ls -la ~/aquarium-tracker/aquarium-tracker/app.py
+ls -la ~/aquarium-tracker/aquarium-tracker/templates/index.html
 
 # Try starting manually to see errors
-cd ~/waterscribe/waterscribe
+cd ~/aquarium-tracker/aquarium-tracker
 source venv/bin/activate
 python3 app.py
 ```
@@ -157,4 +157,4 @@ The cycling schedule can now be set up with exact dates for:
 - Specific dates for adding fish groups
 - Exact water change dates during cycling
 
-Enjoy your enhanced WaterScribe! 🐠
+Enjoy your enhanced aquarium tracker! 🐠

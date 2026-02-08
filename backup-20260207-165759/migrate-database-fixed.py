@@ -122,7 +122,7 @@ def migrate():
     print(f"All {len(existing_tasks)} existing tasks preserved as recurring tasks")
     print()
     print("Next steps:")
-    print("  1. Restart your app: sudo systemctl restart waterscribe")
+    print("  1. Restart your app: sudo systemctl restart aquarium-tracker")
     print("  2. Try adding a task through the web interface")
     print()
     

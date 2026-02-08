@@ -1,4 +1,4 @@
-# WaterScribe - Setup Guide
+# Aquarium Tracker - Setup Guide
 
 A beautiful web-based aquarium management system with scheduling, parameter tracking, and maintenance logging.
 
@@ -30,8 +30,8 @@ sudo apt install nginx -y
 
 ```bash
 # Create application directory
-mkdir -p ~/waterscribe
-cd ~/waterscribe
+mkdir -p ~/aquarium-tracker
+cd ~/aquarium-tracker
 
 # Copy all files to this directory
 # - app.py
@@ -60,36 +60,36 @@ python3 app.py
 
 ```bash
 # Edit the service file
-nano waterscribe.service
+nano aquarium-tracker.service
 
 # Update these lines:
 # - User=YOUR_USERNAME (e.g., User=john)
-# - WorkingDirectory=/path/to/waterscribe (e.g., /home/john/waterscribe)
-# - ExecStart=/path/to/waterscribe/venv/bin/python3 app.py
+# - WorkingDirectory=/path/to/aquarium-tracker (e.g., /home/john/aquarium-tracker)
+# - ExecStart=/path/to/aquarium-tracker/venv/bin/python3 app.py
 
 # Copy service file to systemd
-sudo cp waterscribe.service /etc/systemd/system/
+sudo cp aquarium-tracker.service /etc/systemd/system/
 
 # Enable and start the service
 sudo systemctl daemon-reload
-sudo systemctl enable waterscribe
-sudo systemctl start waterscribe
+sudo systemctl enable aquarium-tracker
+sudo systemctl start aquarium-tracker
 
 # Check status
-sudo systemctl status waterscribe
+sudo systemctl status aquarium-tracker
 ```
 
 ### Step 4: Set Up Nginx Reverse Proxy (Optional but Recommended)
 
 ```bash
 # Edit nginx configuration
-sudo nano /etc/nginx/sites-available/waterscribe
+sudo nano /etc/nginx/sites-available/aquarium-tracker
 
-# Paste the contents from nginx-waterscribe.conf
+# Paste the contents from nginx-aquarium-tracker.conf
 # Update 'server_name' with your domain or IP
 
 # Enable the site
-sudo ln -s /etc/nginx/sites-available/waterscribe /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/aquarium-tracker /etc/nginx/sites-enabled/
 
 # Test nginx configuration
 sudo nginx -t
@@ -121,7 +121,7 @@ sudo certbot --nginx -d your-domain.com
 
 ## Usage
 
-Access your WaterScribe at:
+Access your aquarium tracker at:
 - With Nginx: http://your-domain.com or http://your-server-ip
 - Direct access: http://your-server-ip:5000
 
@@ -140,17 +140,17 @@ The application uses SQLite with the database stored at `aquarium.db` in the app
 
 ```bash
 # Create backup
-cp ~/waterscribe/aquarium.db ~/waterscribe/backup-$(date +%Y%m%d).db
+cp ~/aquarium-tracker/aquarium.db ~/aquarium-tracker/backup-$(date +%Y%m%d).db
 
 # Restore from backup
-cp ~/waterscribe/backup-20240101.db ~/waterscribe/aquarium.db
+cp ~/aquarium-tracker/backup-20240101.db ~/aquarium-tracker/aquarium.db
 ```
 
 ### Manual Database Access
 
 ```bash
 # Open database
-sqlite3 ~/waterscribe/aquarium.db
+sqlite3 ~/aquarium-tracker/aquarium.db
 
 # View tables
 .tables
@@ -166,16 +166,16 @@ SELECT * FROM water_parameters ORDER BY timestamp DESC LIMIT 10;
 
 ```bash
 # View service logs
-sudo journalctl -u waterscribe -f
+sudo journalctl -u aquarium-tracker -f
 
 # Restart service
-sudo systemctl restart waterscribe
+sudo systemctl restart aquarium-tracker
 
 # Stop service
-sudo systemctl stop waterscribe
+sudo systemctl stop aquarium-tracker
 
 # Check service status
-sudo systemctl status waterscribe
+sudo systemctl status aquarium-tracker
 ```
 
 ## Troubleshooting
@@ -183,10 +183,10 @@ sudo systemctl status waterscribe
 ### App won't start
 ```bash
 # Check logs
-sudo journalctl -u waterscribe -n 50
+sudo journalctl -u aquarium-tracker -n 50
 
 # Test manually
-cd ~/waterscribe
+cd ~/aquarium-tracker
 source venv/bin/activate
 python3 app.py
 ```
@@ -194,7 +194,7 @@ python3 app.py
 ### Can't connect to app
 ```bash
 # Check if app is running
-sudo systemctl status waterscribe
+sudo systemctl status aquarium-tracker
 
 # Check if port is open
 sudo netstat -tlnp | grep 5000
@@ -206,10 +206,10 @@ sudo ufw status
 ### Database errors
 ```bash
 # Check file permissions
-ls -la ~/waterscribe/aquarium.db
+ls -la ~/aquarium-tracker/aquarium.db
 
 # Fix permissions if needed
-chmod 664 ~/waterscribe/aquarium.db
+chmod 664 ~/aquarium-tracker/aquarium.db
 ```
 
 ## Customization
@@ -248,12 +248,12 @@ app.config['SECRET_KEY'] = 'your-secret-key-here'
 crontab -e
 
 # Add daily backup at 2 AM
-0 2 * * * cp ~/waterscribe/aquarium.db ~/waterscribe/backups/backup-$(date +\%Y\%m\%d).db
+0 2 * * * cp ~/aquarium-tracker/aquarium.db ~/aquarium-tracker/backups/backup-$(date +\%Y\%m\%d).db
 ```
 
 5. **Update regularly**:
 ```bash
-cd ~/waterscribe
+cd ~/aquarium-tracker
 source venv/bin/activate
 pip install --upgrade flask flask-cors
 ```
@@ -261,7 +261,7 @@ pip install --upgrade flask flask-cors
 ## Support
 
 For issues or questions:
-- Check the logs: `sudo journalctl -u waterscribe -f`
+- Check the logs: `sudo journalctl -u aquarium-tracker -f`
 - Verify database: `sqlite3 aquarium.db`
 - Test connectivity: `curl http://localhost:5000`
 
