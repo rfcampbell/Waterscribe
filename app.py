@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WaterScribe Application
+Aquarium Tracker Application
 A Flask-based web app for tracking aquarium maintenance and parameters
 """
 
@@ -89,43 +89,55 @@ def index():
     """Serve the main application page"""
     return render_template('index.html')
 
-@app.route('/api/parameters', methods=['GET', 'POST'])
+@app.route('/api/parameters', methods=['GET', 'POST', 'DELETE'])
 def parameters():
     """Handle water parameter data"""
     conn = get_db()
     
-    if request.method == 'POST':
-        data = request.json
-        c = conn.cursor()
-        c.execute('''
-            INSERT INTO water_parameters (temperature, ph, ammonia, nitrite, nitrate, notes)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (
-            data.get('temperature'),
-            data.get('ph'),
-            data.get('ammonia'),
-            data.get('nitrite'),
-            data.get('nitrate'),
-            data.get('notes')
-        ))
-        conn.commit()
-        conn.close()
-        return jsonify({'success': True, 'id': c.lastrowid})
+    try:
+        if request.method == 'POST':
+            data = request.json
+            c = conn.cursor()
+            c.execute('''
+                INSERT INTO water_parameters (temperature, ph, ammonia, nitrite, nitrate, notes)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                data.get('temperature'),
+                data.get('ph'),
+                data.get('ammonia'),
+                data.get('nitrite'),
+                data.get('nitrate'),
+                data.get('notes')
+            ))
+            conn.commit()
+            return jsonify({'success': True, 'id': c.lastrowid})
+        
+        elif request.method == 'DELETE':
+            # Delete a specific parameter reading by ID
+            param_id = request.args.get('id', type=int)
+            if not param_id:
+                return jsonify({'success': False, 'error': 'ID required'}), 400
+            
+            c = conn.cursor()
+            c.execute('DELETE FROM water_parameters WHERE id = ?', (param_id,))
+            conn.commit()
+            return jsonify({'success': True})
+        
+        else:
+            # GET: return recent parameters
+            limit = request.args.get('limit', 50, type=int)
+            c = conn.cursor()
+            c.execute('''
+                SELECT * FROM water_parameters 
+                ORDER BY timestamp DESC 
+                LIMIT ?
+            ''', (limit,))
+            
+            rows = c.fetchall()
+            return jsonify([dict(row) for row in rows])
     
-    else:
-        # GET: return recent parameters
-        limit = request.args.get('limit', 50, type=int)
-        c = conn.cursor()
-        c.execute('''
-            SELECT * FROM water_parameters 
-            ORDER BY timestamp DESC 
-            LIMIT ?
-        ''', (limit,))
-        
-        rows = c.fetchall()
+    finally:
         conn.close()
-        
-        return jsonify([dict(row) for row in rows])
 
 @app.route('/api/maintenance', methods=['GET', 'POST'])
 def maintenance():
