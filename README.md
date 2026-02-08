@@ -1,5 +1,8 @@
 # 🐠 WaterScribe
 
+<img width="2828" height="1472" alt="image" src="https://github.com/user-attachments/assets/e9a41063-eedb-4ef2-b6c1-21cc672614bb" />
+
+
 A beautiful, feature-rich web application for tracking aquarium maintenance, water parameters, and fish inventory.
 
 ## ✨ Features
