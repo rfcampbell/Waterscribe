@@ -1,6 +1,7 @@
 # 🐠 WaterScribe
 
 <img width="2754" height="1482" alt="image" src="https://github.com/user-attachments/assets/dd518c2b-9d03-4a3e-a38f-cd08de232710" />
+<img width="2794" height="1400" alt="image" src="https://github.com/user-attachments/assets/d834d6c7-8772-4fab-9398-26de19810e97" />
 
 
 
