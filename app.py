@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WaterScribe Application
+Aquarium Tracker Application
 A Flask-based web app for tracking aquarium maintenance and parameters
 """
 
@@ -98,10 +98,13 @@ def parameters():
         if request.method == 'POST':
             data = request.json
             c = conn.cursor()
+            # Use local time explicitly
+            local_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             c.execute('''
-                INSERT INTO water_parameters (temperature, ph, ammonia, nitrite, nitrate, notes)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO water_parameters (timestamp, temperature, ph, ammonia, nitrite, nitrate, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
+                local_timestamp,
                 data.get('temperature'),
                 data.get('ph'),
                 data.get('ammonia'),
@@ -147,10 +150,12 @@ def maintenance():
     if request.method == 'POST':
         data = request.json
         c = conn.cursor()
+        local_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         c.execute('''
-            INSERT INTO maintenance_log (task_type, description, completed)
-            VALUES (?, ?, ?)
+            INSERT INTO maintenance_log (timestamp, task_type, description, completed)
+            VALUES (?, ?, ?, ?)
         ''', (
+            local_timestamp,
             data.get('task_type'),
             data.get('description'),
             data.get('completed', True)
@@ -259,10 +264,11 @@ def scheduled():
                     ''', (now.isoformat(), task_id))
                 
                 # Also log to maintenance
+                log_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 c.execute('''
-                    INSERT INTO maintenance_log (task_type, description)
-                    VALUES (?, ?)
-                ''', (data.get('task_name', 'Scheduled Task'), 'Completed scheduled task'))
+                    INSERT INTO maintenance_log (timestamp, task_type, description)
+                    VALUES (?, ?, ?)
+                ''', (log_timestamp, data.get('task_name', 'Scheduled Task'), 'Completed scheduled task'))
                 
                 conn.commit()
             
