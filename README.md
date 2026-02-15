@@ -1,177 +1,214 @@
-# 🐠 WaterScribe
+# WaterScribe v2 - Multi-User Aquarium Tracking
 
-<img width="2754" height="1482" alt="image" src="https://github.com/user-attachments/assets/dd518c2b-9d03-4a3e-a38f-cd08de232710" />
-<img width="2794" height="1400" alt="image" src="https://github.com/user-attachments/assets/d834d6c7-8772-4fab-9398-26de19810e97" />
+WaterScribe is a comprehensive aquarium management system with multi-user support, built with Flask and PostgreSQL.
 
+## 🌊 Features
 
+- **Multi-User Support**: Each user can manage multiple aquariums
+- **Water Parameters**: Track temperature, pH, ammonia, nitrite, nitrate with trends
+- **Maintenance Logging**: Record and track aquarium maintenance activities
+- **Scheduled Tasks**: Set up recurring or one-time maintenance reminders  
+- **Fish Inventory**: Keep track of fish species and quantities
+- **Charts & Analytics**: Visualize water parameter trends over time
+- **Responsive Design**: Works on desktop and mobile devices
+- **Docker Support**: Easy deployment with Docker Compose
 
-A beautiful, feature-rich web application for tracking aquarium maintenance, water parameters, and fish inventory.
+## 🏗️ Architecture
 
-## ✨ Features
+- **Flask** with Blueprint architecture (auth, dashboard, api)
+- **PostgreSQL** database with SQLAlchemy ORM
+- **Flask-Login** for session management
+- **Flask-Migrate** for database migrations
+- **Gunicorn** WSGI server behind nginx reverse proxy
+- **Docker Compose** for orchestration
 
-- **Water Parameter Logging**: Track temperature, pH, ammonia, nitrite, nitrate
-- **Scheduled Maintenance**: Set up recurring tasks with automatic due dates
-- **Maintenance History**: Detailed logs of all activities
-- **Fish Inventory Management**: Track species, quantities, and notes
-- **Beautiful UI**: Ocean-themed design with animated bubbles
-- **SQLite Database**: Reliable local storage with easy backups
+## 🚀 Quick Start
 
-## 🚀 Quick Start (Easiest Method)
+### 1. Clone and Setup
 
 ```bash
-# 1. Copy all files to your Linux server
-scp -r * user@your-server:~/waterscribe/
-
-# 2. SSH into your server
-ssh user@your-server
-
-# 3. Navigate to directory
-cd ~/waterscribe
-
-# 4. Run the installer
-chmod +x install.sh
-./install.sh
+git clone https://github.com/rfcampbell/waterscribe-dev.git
+cd waterscribe-dev
+git checkout v2-multiuser
 ```
 
-The installer will:
-- Install all dependencies
-- Set up Python virtual environment
-- Create systemd service
-- Optionally configure Nginx
-- Optionally install SSL certificate
+### 2. Environment Configuration
 
-## 📋 Manual Installation
-
-### Prerequisites
 ```bash
-sudo apt update
-sudo apt install python3 python3-pip python3-venv -y
+cp .env.example .env
+# Edit .env with your secrets:
+# - Generate a secure SECRET_KEY
+# - Set a strong POSTGRES_PASSWORD
 ```
 
-### Install
+### 3. Run with Docker Compose
+
 ```bash
-cd ~/waterscribe
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python3 app.py
+docker-compose up --build
 ```
 
-Visit `http://your-server-ip:5000`
+The application will be available at http://localhost
 
-## 📁 Files Included
+### 4. Initialize Database
 
-- `app.py` - Main Flask application
-- `templates/index.html` - Frontend interface
-- `requirements.txt` - Python dependencies
-- `install.sh` - Automated installation script
-- `waterscribe.service` - Systemd service file
-- `nginx-waterscribe.conf` - Nginx configuration
-- `SETUP_GUIDE.md` - Detailed setup instructions
+```bash
+# Run migrations inside the container
+docker-compose exec web python -m flask db upgrade
 
-## 🎨 Interface
+# OR run the container interactively
+docker-compose exec web bash
+flask db upgrade
+```
 
-The app features four main sections:
+## 📊 Migration from v1
 
-1. **Water Parameters** - Log and view water chemistry
-2. **Schedule** - Manage recurring maintenance tasks
-3. **Maintenance Log** - Record completed activities
-4. **Fish Inventory** - Track your aquatic life
+If you have an existing `aquarium.db` from the single-user version:
+
+```bash
+# Make sure aquarium.db is in the project root
+docker-compose exec web python migrate_from_sqlite.py
+```
+
+This creates:
+- Default user: `admin@waterscribe.local` 
+- Default password: `waterscribe123` (⚠️ **CHANGE THIS!**)
+- Migrates all existing data to the new schema
+
+## 🛠️ Development Setup
+
+### Local Development (without Docker)
+
+1. **Install Dependencies**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+
+2. **Database Setup**
+   ```bash
+   # Install PostgreSQL locally or use Docker for just the DB
+   docker run --name postgres-dev -e POSTGRES_PASSWORD=dev -p 5432:5432 -d postgres:16
+   
+   # Set DATABASE_URL in .env
+   export DATABASE_URL=postgresql://postgres:dev@localhost:5432/waterscribe_dev
+   ```
+
+3. **Initialize Flask App**
+   ```bash
+   export FLASK_APP=wsgi.py
+   export FLASK_ENV=development
+   flask db upgrade
+   flask run
+   ```
+
+### Database Migrations
+
+```bash
+# Create a new migration
+flask db migrate -m "Description of changes"
+
+# Apply migrations
+flask db upgrade
+
+# Downgrade if needed
+flask db downgrade
+```
+
+## 📁 Project Structure
+
+```
+waterscribe/
+├── app/
+│   ├── __init__.py          # Application factory
+│   ├── config.py            # Configuration classes  
+│   ├── models.py            # SQLAlchemy models
+│   ├── auth/                # Authentication blueprint
+│   │   ├── __init__.py
+│   │   ├── routes.py        # Login, register, logout
+│   │   └── forms.py         # WTForms
+│   ├── dashboard/           # Main UI blueprint
+│   │   ├── __init__.py
+│   │   └── routes.py        # Dashboard, aquarium management
+│   ├── api/                 # JSON API blueprint
+│   │   ├── __init__.py
+│   │   └── routes.py        # CRUD operations, charts
+│   ├── templates/
+│   │   ├── base.html        # Base template with ocean theme
+│   │   ├── auth/            # Login/register pages
+│   │   └── dashboard/       # Main application UI
+│   └── static/              # CSS, JavaScript, assets
+├── migrations/              # Database migrations
+├── docker-compose.yml       # Multi-service orchestration
+├── Dockerfile              # App container definition
+├── nginx.conf              # Reverse proxy configuration
+├── requirements.txt        # Python dependencies
+├── wsgi.py                 # WSGI entry point
+├── migrate_from_sqlite.py  # v1 to v2 migration script
+└── README.md               # This file
+```
+
+## 🎨 UI/UX
+
+- **Dark Ocean Theme**: Deep blues and seafoam greens
+- **Responsive Design**: Works on phones, tablets, desktop
+- **Animated Background**: Floating bubbles for ambiance
+- **Intuitive Navigation**: Tab-based interface for different functions
+- **Real-time Charts**: Interactive parameter trend visualization
+
+## 🔐 Security
+
+- **Password Hashing**: Bcrypt for secure password storage
+- **Session Management**: Flask-Login with secure cookies
+- **CSRF Protection**: Built-in with Flask-WTF
+- **SQL Injection Prevention**: SQLAlchemy ORM
+- **XSS Protection**: Jinja2 template auto-escaping
+- **Docker Security**: Non-root user, minimal attack surface
+
+## 📈 API Endpoints
+
+All API endpoints require authentication and are scoped to user's aquariums:
+
+- `GET/POST/DELETE /api/aquarium/{id}/parameters` - Water parameters
+- `GET/POST/DELETE /api/aquarium/{id}/maintenance` - Maintenance log  
+- `GET/POST/PUT/DELETE /api/aquarium/{id}/scheduled` - Scheduled tasks
+- `GET/POST/DELETE /api/aquarium/{id}/fish` - Fish inventory
+- `GET /api/aquarium/{id}/parameters/chart` - Chart data
+- `GET /api/aquarium/{id}/stats` - Summary statistics
+
+## 🐳 Docker Services
+
+- **web**: Flask application with Gunicorn
+- **db**: PostgreSQL 16 database
+- **nginx**: Reverse proxy and static file serving
 
 ## 🔧 Configuration
 
-### Change Port
-Edit `app.py`, line at bottom:
-```python
-app.run(host='0.0.0.0', port=YOUR_PORT)
-```
+Environment variables:
 
-### Customize Colors
-Edit `templates/index.html`, CSS variables at top:
-```css
-:root {
-    --deep-ocean: #0a1628;
-    --coral: #ff6b9d;
-    --seafoam: #4ecdc4;
-}
-```
+- `SECRET_KEY`: Flask secret key (required)
+- `POSTGRES_PASSWORD`: Database password (required)
+- `DATABASE_URL`: Full database connection string
+- `FLASK_ENV`: development/production
+- `SESSION_COOKIE_SECURE`: HTTPS cookie flag
 
-## 💾 Database
+## 📝 Contributing
 
-Data is stored in SQLite at `aquarium.db`
+1. Fork the repository
+2. Create a feature branch
+3. Make changes with tests
+4. Submit a pull request
 
-### Backup
-```bash
-cp aquarium.db backup-$(date +%Y%m%d).db
-```
+## 📄 License
 
-### View Data
-```bash
-sqlite3 aquarium.db
-SELECT * FROM water_parameters ORDER BY timestamp DESC LIMIT 10;
-.quit
-```
+MIT License - see LICENSE file for details
 
-## 🔐 Security Tips
+## 🆘 Support
 
-1. Use Nginx reverse proxy (included in install.sh)
-2. Enable SSL with Let's Encrypt (included in install.sh)
-3. Regular backups (set up cron job)
-4. Keep dependencies updated
-5. Don't expose port 5000 directly to internet
-
-## 📊 Common Tasks
-
-### Start/Stop Service
-```bash
-sudo systemctl start waterscribe
-sudo systemctl stop waterscribe
-sudo systemctl restart waterscribe
-```
-
-### View Logs
-```bash
-sudo journalctl -u waterscribe -f
-```
-
-### Check Status
-```bash
-sudo systemctl status waterscribe
-```
-
-## 🐛 Troubleshooting
-
-**Can't connect to app:**
-```bash
-sudo systemctl status waterscribe
-sudo netstat -tlnp | grep 5000
-```
-
-**Database errors:**
-```bash
-ls -la aquarium.db
-chmod 664 aquarium.db
-```
-
-**View error logs:**
-```bash
-sudo journalctl -u waterscribe -n 100
-```
-
-## 📱 Access
-
-- **Direct**: `http://your-server-ip:5000`
-- **With Nginx**: `http://your-domain.com`
-- **With SSL**: `https://your-domain.com`
-
-## 🎯 Usage Tips
-
-1. Log water parameters at least weekly
-2. Set up recurring tasks for regular maintenance
-3. Check the dashboard for upcoming tasks
-4. Back up your database monthly
-5. Update fish inventory when adding/removing species
+- 📧 Issues: GitHub Issues
+- 📖 Documentation: This README and code comments
+- 🐛 Bug Reports: Please include steps to reproduce
 
 ---
 
-**Need help?** Check SETUP_GUIDE.md for detailed instructions or troubleshooting steps.
+Built with 🌊 for aquarium enthusiasts

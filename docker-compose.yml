@@ -1,38 +1,43 @@
 version: '3.8'
 
 services:
-  waterscribe:
+  web:
     build: .
     ports:
-      - "5000:80"
-    volumes:
-      # Persist database
-      - ./aquarium.db:/app/aquarium.db
-      # Persist logs
-      - waterscribe_logs:/var/log/waterscribe
+      - "5000:5000"
     environment:
       - FLASK_ENV=production
-      - DATABASE_URL=sqlite:///aquarium.db
-      - SECRET_KEY=your-secret-key-change-me
+      - DATABASE_URL=postgresql://waterscribe:${POSTGRES_PASSWORD}@db:5432/waterscribe
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      - db
+    volumes:
+      - ./logs:/app/logs
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
-  # Optional: Add nginx proxy for SSL termination
-  # nginx-proxy:
-  #   image: nginx:alpine
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"
-  #   volumes:
-  #     - ./nginx-proxy.conf:/etc/nginx/nginx.conf
-  #     - ./ssl:/etc/ssl/certs
-  #   depends_on:
-  #     - waterscribe
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_DB=waterscribe
+      - POSTGRES_USER=waterscribe
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./logs:/var/log/nginx
+    depends_on:
+      - web
+    restart: unless-stopped
 
 volumes:
-  waterscribe_logs:
+  postgres_data:

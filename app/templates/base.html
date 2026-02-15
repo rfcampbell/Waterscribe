@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if title %}{{ title }} - {% endif %}WaterScribe</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --deep-ocean: #0a1628;
+            --mid-ocean: #1a2f4f;
+            --surface: #2d4a6f;
+            --coral: #ff6b9d;
+            --seafoam: #4ecdc4;
+            --sand: #f7b267;
+            --pearl: #f0f4f8;
+            --kelp: #2d6a4f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: linear-gradient(135deg, var(--deep-ocean) 0%, var(--mid-ocean) 50%, var(--surface) 100%);
+            color: var(--pearl);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Animated background bubbles */
+        .bubble {
+            position: fixed;
+            bottom: -100px;
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle at 30% 30%, rgba(78, 205, 196, 0.3), rgba(78, 205, 196, 0.05));
+            border-radius: 50%;
+            opacity: 0.6;
+            animation: rise 15s infinite ease-in;
+            z-index: 0;
+        }
+
+        .bubble:nth-child(2) { left: 10%; animation-duration: 12s; animation-delay: 2s; width: 60px; height: 60px; }
+        .bubble:nth-child(3) { left: 25%; animation-duration: 18s; animation-delay: 4s; width: 30px; height: 30px; }
+        .bubble:nth-child(4) { left: 45%; animation-duration: 14s; animation-delay: 1s; width: 50px; height: 50px; }
+        .bubble:nth-child(5) { left: 65%; animation-duration: 16s; animation-delay: 3s; width: 35px; height: 35px; }
+        .bubble:nth-child(6) { left: 80%; animation-duration: 13s; animation-delay: 5s; width: 45px; height: 45px; }
+        .bubble:nth-child(7) { left: 90%; animation-duration: 20s; animation-delay: 0s; width: 25px; height: 25px; }
+
+        @keyframes rise {
+            0% {
+                bottom: -100px;
+                transform: translateX(0);
+            }
+            50% {
+                transform: translateX(100px);
+            }
+            100% {
+                bottom: 110vh;
+                transform: translateX(-100px);
+            }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px 15px;
+            }
+        }
+
+        /* Header styles */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 50px;
+            animation: fadeInDown 0.8s ease;
+        }
+
+        .logo {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--seafoam), var(--coral));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-decoration: none;
+        }
+
+        .user-nav {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .user-info {
+            color: var(--pearl);
+            opacity: 0.8;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-family: inherit;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-block;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--seafoam), var(--coral));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(78, 205, 196, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(240, 244, 248, 0.1);
+            color: var(--pearl);
+            border: 1px solid rgba(240, 244, 248, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(240, 244, 248, 0.2);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 107, 107, 0.3);
+        }
+
+        /* Flash messages */
+        .flash-messages {
+            margin-bottom: 30px;
+        }
+
+        .flash-message {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            animation: slideInDown 0.5s ease;
+        }
+
+        .flash-message.success {
+            background: rgba(45, 106, 79, 0.2);
+            border: 1px solid var(--kelp);
+            color: #90ee90;
+        }
+
+        .flash-message.danger,
+        .flash-message.error {
+            background: rgba(255, 107, 107, 0.2);
+            border: 1px solid #ff6b6b;
+            color: #ffcccb;
+        }
+
+        .flash-message.info {
+            background: rgba(78, 205, 196, 0.2);
+            border: 1px solid var(--seafoam);
+            color: #b0f0ed;
+        }
+
+        .flash-message.warning {
+            background: rgba(247, 178, 103, 0.2);
+            border: 1px solid var(--sand);
+            color: #ffd700;
+        }
+
+        /* Form styles */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--pearl);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(240, 244, 248, 0.05);
+            border: 1px solid rgba(240, 244, 248, 0.2);
+            border-radius: 8px;
+            color: var(--pearl);
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--seafoam);
+            box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.1);
+        }
+
+        .form-control::placeholder {
+            color: rgba(240, 244, 248, 0.5);
+        }
+
+        .form-error {
+            color: #ffcccb;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        /* Animation utilities */
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease;
+        }
+
+        /* Responsive utilities */
+        @media (max-width: 768px) {
+            .logo {
+                font-size: 2rem;
+            }
+            
+            header {
+                flex-direction: column;
+                gap: 20px;
+                text-align: center;
+            }
+            
+            .user-nav {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Animated background bubbles -->
+    <div class="bubble"></div>
+    <div class="bubble"></div>
+    <div class="bubble"></div>
+    <div class="bubble"></div>
+    <div class="bubble"></div>
+    <div class="bubble"></div>
+    <div class="bubble"></div>
+
+    <div class="container">
+        {% if current_user.is_authenticated %}
+        <header>
+            <a href="{{ url_for('dashboard.index') }}" class="logo">WaterScribe</a>
+            <div class="user-nav">
+                <div class="user-info">
+                    Welcome, {{ current_user.display_name }}!
+                </div>
+                <a href="{{ url_for('auth.logout') }}" class="btn btn-secondary">Logout</a>
+            </div>
+        </header>
+        {% endif %}
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Main content -->
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- JavaScript -->
+    {% block scripts %}{% endblock %}
+</body>
+</html>
