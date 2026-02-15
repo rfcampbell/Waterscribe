@@ -664,7 +664,7 @@
 
         <div class="tabs">
             <button class="tab-btn active" onclick="showTab('parameters')">Parameters</button>
-            <!-- <button class="tab-btn" onclick="showTab('charts')">Charts</button> -->
+            <button class="tab-btn" onclick="showTab('charts')">Charts</button>
             <button class="tab-btn" onclick="showTab('schedule')">Schedule</button>
             <button class="tab-btn" onclick="showTab('maintenance')">Maintenance</button>
             <button class="tab-btn" onclick="showTab('fish')">Fish</button>
@@ -707,15 +707,20 @@
             </div>
         </div>
 
-        <!-- Charts Tab - Disabled for compatibility -->
-        <!-- 
+        <!-- Charts Tab -->
         <div id="tab-charts" class="tab-content">
             <div class="section">
                 <h2 class="section-title">Parameter Trends</h2>
-                <p>Charts feature coming soon...</p>
+                <div class="chart-controls">
+                    <button onclick="loadChart(7)" class="chart-period">7 Days</button>
+                    <button onclick="loadChart(30)" class="chart-period active">30 Days</button>
+                    <button onclick="loadChart(90)" class="chart-period">90 Days</button>
+                </div>
+                <div class="chart-container">
+                    <canvas id="parametersChart"></canvas>
+                </div>
             </div>
         </div>
-        -->
 
         <!-- Schedule Tab -->
         <div id="tab-schedule" class="tab-content">
@@ -964,7 +969,8 @@
                 });
                 event?.target?.classList.add('active');
                 
-                const data = await api(`/api/parameters/chart?days=${days}`);
+                const response = await fetch(`http://127.0.0.1:5002/api/parameters/chart?days=${days}`);
+                const data = await response.json();
                 
                 const ctx = document.getElementById('parametersChart').getContext('2d');
                 
@@ -972,37 +978,19 @@
                     chart.destroy();
                 }
                 
+                // Create datasets array from the data
+                const datasets = [];
+                for (const [key, dataset] of Object.entries(data.datasets)) {
+                    if (dataset.data && dataset.data.some(val => val !== null && val !== undefined)) {
+                        datasets.push(dataset);
+                    }
+                }
+
                 chart = new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: data.labels,
-                        datasets: [
-                            {
-                                ...data.datasets.temperature,
-                                fill: false,
-                                tension: 0.3
-                            },
-                            {
-                                ...data.datasets.ph,
-                                fill: false,
-                                tension: 0.3
-                            },
-                            {
-                                ...data.datasets.ammonia,
-                                fill: false,
-                                tension: 0.3
-                            },
-                            {
-                                ...data.datasets.nitrite,
-                                fill: false,
-                                tension: 0.3
-                            },
-                            {
-                                ...data.datasets.nitrate,
-                                fill: false,
-                                tension: 0.3
-                            }
-                        ].filter(dataset => dataset.data.some(val => val !== null))
+                        datasets: datasets
                     },
                     options: {
                         responsive: true,
