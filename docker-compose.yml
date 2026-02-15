@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  waterscribe:
+    build: .
+    ports:
+      - "5000:80"
+    volumes:
+      # Persist database
+      - ./aquarium.db:/app/aquarium.db
+      # Persist logs
+      - waterscribe_logs:/var/log/waterscribe
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=sqlite:///aquarium.db
+      - SECRET_KEY=your-secret-key-change-me
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Add nginx proxy for SSL termination
+  # nginx-proxy:
+  #   image: nginx:alpine
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx-proxy.conf:/etc/nginx/nginx.conf
+  #     - ./ssl:/etc/ssl/certs
+  #   depends_on:
+  #     - waterscribe
+
+volumes:
+  waterscribe_logs:
