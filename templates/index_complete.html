@@ -969,26 +969,7 @@
                 });
                 event?.target?.classList.add('active');
                 
-                // Use mock data for now since chart API keeps getting killed
-                const data = {
-                    labels: ['2/7', '2/9', '2/11', '2/13', '2/14'],
-                    datasets: {
-                        temperature: {
-                            label: 'Temperature (°F)',
-                            data: [74.0, 71.6, 77.5, 78.6, 78.2],
-                            borderColor: '#ff6b9d',
-                            fill: false,
-                            tension: 0.3
-                        },
-                        ph: {
-                            label: 'pH',
-                            data: [6.8, 6.8, 7.0, null, 7.0],
-                            borderColor: '#4ecdc4',
-                            fill: false,
-                            tension: 0.3
-                        }
-                    }
-                };
+                const data = await api(`/api/parameters/chart?days=${days}`);
                 
                 const ctx = document.getElementById('parametersChart').getContext('2d');
                 
@@ -996,19 +977,37 @@
                     chart.destroy();
                 }
                 
-                // Create datasets array from the data
-                const datasets = [];
-                for (const [key, dataset] of Object.entries(data.datasets)) {
-                    if (dataset.data && dataset.data.some(val => val !== null && val !== undefined)) {
-                        datasets.push(dataset);
-                    }
-                }
-
                 chart = new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: data.labels,
-                        datasets: datasets
+                        datasets: [
+                            {
+                                ...data.datasets.temperature,
+                                fill: false,
+                                tension: 0.3
+                            },
+                            {
+                                ...data.datasets.ph,
+                                fill: false,
+                                tension: 0.3
+                            },
+                            {
+                                ...data.datasets.ammonia,
+                                fill: false,
+                                tension: 0.3
+                            },
+                            {
+                                ...data.datasets.nitrite,
+                                fill: false,
+                                tension: 0.3
+                            },
+                            {
+                                ...data.datasets.nitrate,
+                                fill: false,
+                                tension: 0.3
+                            }
+                        ].filter(dataset => dataset.data.some(val => val !== null))
                     },
                     options: {
                         responsive: true,
@@ -1048,7 +1047,43 @@
 
         // Edit functions
         function editParameters(id) {
-            alert('Edit functionality coming soon! For now, you can add new parameter readings.');
+            api(`/api/parameters`)
+                .then(data => {
+                    const item = data.find(p => p.id === id);
+                    if (!item) return;
+                    
+                    currentEditType = 'parameters';
+                    currentEditId = id;
+                    
+                    document.getElementById('editFields').innerHTML = `
+                        <div class="form-group">
+                            <label>Temperature (°F)</label>
+                            <input type="number" name="temperature" step="0.1" value="${item.temperature || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>pH Level</label>
+                            <input type="number" name="ph" step="0.1" value="${item.ph || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>Ammonia (ppm)</label>
+                            <input type="number" name="ammonia" step="0.01" value="${item.ammonia || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>Nitrite (ppm)</label>
+                            <input type="number" name="nitrite" step="0.01" value="${item.nitrite || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>Nitrate (ppm)</label>
+                            <input type="number" name="nitrate" step="0.1" value="${item.nitrate || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>Notes</label>
+                            <textarea name="notes">${item.notes || ''}</textarea>
+                        </div>
+                    `;
+                    
+                    document.getElementById('editModal').classList.add('active');
+                });
         }
 
         function closeEditModal() {
@@ -1355,7 +1390,35 @@
         }
 
         function editFish(id) {
-            alert('Edit functionality coming soon! For now, you can add new fish entries.');
+            api('/api/fish')
+                .then(data => {
+                    const item = data.find(f => f.id === id);
+                    if (!item) return;
+                    
+                    currentEditType = 'fish';
+                    currentEditId = id;
+                    
+                    document.getElementById('editFields').innerHTML = `
+                        <div class="form-group">
+                            <label>Species</label>
+                            <input type="text" name="species" value="${item.species}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Common Name</label>
+                            <input type="text" name="common_name" value="${item.common_name || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>Quantity</label>
+                            <input type="number" name="quantity" value="${item.quantity}" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Notes</label>
+                            <textarea name="notes">${item.notes || ''}</textarea>
+                        </div>
+                    `;
+                    
+                    document.getElementById('editModal').classList.add('active');
+                });
         }
 
         async function deleteFish(id) {
