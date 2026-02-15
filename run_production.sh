@@ -34,13 +34,13 @@ with app.app_context():
 
 # Start gunicorn server
 echo "🌐 Starting production server..."
-echo "📊 Access: http://localhost:5000"
-echo "📊 Access: http://192.168.221.163:5000"
+echo "📊 Access: http://localhost:5003"
+echo "📊 Access: http://192.168.221.163:5003"
 echo "🔄 Press Ctrl+C to stop"
 
 # Run with gunicorn for production
 gunicorn \
-    --bind 0.0.0.0:5000 \
+    --bind 0.0.0.0:5003 \
     --workers 3 \
     --timeout 60 \
     --keep-alive 2 \
