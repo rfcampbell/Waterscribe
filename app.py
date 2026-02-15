@@ -368,4 +368,6 @@ def stats():
 
 if __name__ == '__main__':
     init_db()
+    from chart_api import add_chart_routes
+    add_chart_routes(app)
     app.run(host='0.0.0.0', port=5000, debug=True)

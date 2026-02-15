@@ -969,26 +969,9 @@
                 });
                 event?.target?.classList.add('active');
                 
-                // Use mock data for now since chart API keeps getting killed
-                const data = {
-                    labels: ['2/7', '2/9', '2/11', '2/13', '2/14'],
-                    datasets: {
-                        temperature: {
-                            label: 'Temperature (°F)',
-                            data: [74.0, 71.6, 77.5, 78.6, 78.2],
-                            borderColor: '#ff6b9d',
-                            fill: false,
-                            tension: 0.3
-                        },
-                        ph: {
-                            label: 'pH',
-                            data: [6.8, 6.8, 7.0, null, 7.0],
-                            borderColor: '#4ecdc4',
-                            fill: false,
-                            tension: 0.3
-                        }
-                    }
-                };
+                // Fetch real data from chart API
+                const response = await fetch(`/api/parameters/chart?days=${days}`);
+                const data = await response.json();
                 
                 const ctx = document.getElementById('parametersChart').getContext('2d');
                 
@@ -996,13 +979,32 @@
                     chart.destroy();
                 }
                 
+                // Axis assignments: temperature on left, pH on right, nitrogen params on far right
+                const axisMap = {
+                    temperature: 'yTemp',
+                    ph: 'yPH',
+                    ammonia: 'yNitrogen',
+                    nitrite: 'yNitrogen',
+                    nitrate: 'yNitrogen'
+                };
+
                 // Create datasets array from the data
                 const datasets = [];
                 for (const [key, dataset] of Object.entries(data.datasets)) {
                     if (dataset.data && dataset.data.some(val => val !== null && val !== undefined)) {
-                        datasets.push(dataset);
+                        datasets.push({
+                            ...dataset,
+                            fill: false,
+                            tension: 0.3,
+                            yAxisID: axisMap[key] || 'yTemp',
+                            spanGaps: true
+                        });
                     }
                 }
+
+                // Check which axes have data
+                const hasNitrogen = datasets.some(d => d.yAxisID === 'yNitrogen');
+                const hasPH = datasets.some(d => d.yAxisID === 'yPH');
 
                 chart = new Chart(ctx, {
                     type: 'line',
@@ -1013,29 +1015,54 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
                         plugins: {
                             legend: {
                                 labels: {
                                     color: '#f0f4f8'
                                 }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let val = context.parsed.y;
+                                        return val !== null ? `${context.dataset.label}: ${val}` : null;
+                                    }
+                                }
                             }
                         },
                         scales: {
                             x: {
-                                grid: {
-                                    color: 'rgba(78, 205, 196, 0.1)'
-                                },
-                                ticks: {
-                                    color: '#f0f4f8'
-                                }
+                                grid: { color: 'rgba(78, 205, 196, 0.1)' },
+                                ticks: { color: '#f0f4f8' }
                             },
-                            y: {
-                                grid: {
-                                    color: 'rgba(78, 205, 196, 0.1)'
-                                },
-                                ticks: {
-                                    color: '#f0f4f8'
-                                }
+                            yTemp: {
+                                type: 'linear',
+                                position: 'left',
+                                title: { display: true, text: 'Temperature (°F)', color: '#ff6b9d' },
+                                grid: { color: 'rgba(78, 205, 196, 0.1)' },
+                                ticks: { color: '#ff6b9d' }
+                            },
+                            yPH: {
+                                type: 'linear',
+                                position: 'right',
+                                display: hasPH,
+                                title: { display: true, text: 'pH', color: '#4ecdc4' },
+                                grid: { drawOnChartArea: false },
+                                ticks: { color: '#4ecdc4' },
+                                min: 5.5,
+                                max: 9.0
+                            },
+                            yNitrogen: {
+                                type: 'linear',
+                                position: 'right',
+                                display: hasNitrogen,
+                                title: { display: true, text: 'ppm', color: '#f7b267' },
+                                grid: { drawOnChartArea: false },
+                                ticks: { color: '#f7b267' }
                             }
                         }
                     }

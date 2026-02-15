@@ -61,7 +61,7 @@ def add_chart_routes(app):
                 # Add data points (handle None values)
                 for param in ['temperature', 'ph', 'ammonia', 'nitrite', 'nitrate']:
                     value = row[param]
-                    chart_data['datasets'][param]['data'].append(value)
+                    chart_data['datasets'][param]['data'].append(float(value) if value is not None and value != '' else None)
             
             return jsonify(chart_data)
         
