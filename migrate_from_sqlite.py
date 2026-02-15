@@ -67,15 +67,24 @@ def migrate_data():
             cursor.execute('SELECT * FROM water_parameters ORDER BY timestamp')
             params_count = 0
             for row in cursor.fetchall():
+                # Handle empty strings by converting to None
+                def safe_float(value):
+                    if value == '' or value is None:
+                        return None
+                    try:
+                        return float(value)
+                    except (ValueError, TypeError):
+                        return None
+                
                 param = WaterParameter(
                     aquarium_id=default_aquarium.id,
                     timestamp=datetime.fromisoformat(row['timestamp']) if row['timestamp'] else datetime.utcnow(),
-                    temperature=row['temperature'],
-                    ph=row['ph'],
-                    ammonia=row['ammonia'],
-                    nitrite=row['nitrite'],
-                    nitrate=row['nitrate'],
-                    notes=row['notes']
+                    temperature=safe_float(row['temperature']),
+                    ph=safe_float(row['ph']),
+                    ammonia=safe_float(row['ammonia']),
+                    nitrite=safe_float(row['nitrite']),
+                    nitrate=safe_float(row['nitrate']),
+                    notes=row['notes'] if row['notes'] else None
                 )
                 db.session.add(param)
                 params_count += 1
