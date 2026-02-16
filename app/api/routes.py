@@ -341,8 +341,8 @@ def parameters_chart(aquarium_id):
             'nitrate': {
                 'label': 'Nitrate (ppm)',
                 'data': [],
-                'borderColor': '#2d4a6f',
-                'backgroundColor': 'rgba(45, 74, 111, 0.1)',
+                'borderColor': '#e0e040',
+                'backgroundColor': 'rgba(224, 224, 64, 0.1)',
                 'yAxisID': 'y1'
             }
         }

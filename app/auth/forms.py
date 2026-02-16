@@ -35,3 +35,16 @@ class RegisterForm(FlaskForm):
         user = User.query.filter_by(email=email.data.lower()).first()
         if user:
             raise ValidationError('Email already registered. Please use a different email address.')
+
+class ChangePasswordForm(FlaskForm):
+    """Change password form"""
+    current_password = PasswordField('Current Password', validators=[DataRequired()])
+    new_password = PasswordField('New Password', validators=[
+        DataRequired(),
+        Length(min=8, message='Password must be at least 8 characters long.')
+    ])
+    new_password2 = PasswordField('Confirm New Password', validators=[
+        DataRequired(),
+        EqualTo('new_password', message='Passwords must match.')
+    ])
+    submit = SubmitField('Change Password')
