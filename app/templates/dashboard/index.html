@@ -42,6 +42,10 @@
         box-shadow: 0 10px 40px rgba(78, 205, 196, 0.1);
     }
 
+    .stat-card.clickable {
+        cursor: pointer;
+    }
+
     .stat-label {
         color: rgba(240, 244, 248, 0.7);
         font-size: 0.9rem;
@@ -129,8 +133,9 @@
     }
 
     .log-container {
-        max-height: 400px;
-        overflow-y: auto;
+        max-height: none;
+        overflow-y: visible;
+        padding-bottom: 60px;
     }
 
     .log-item {
@@ -228,7 +233,7 @@
 
 <!-- Dashboard Stats -->
 <div class="dashboard" id="dashboard">
-    <div class="stat-card">
+    <div class="stat-card clickable" onclick="navigateTab('charts')">
         <div class="stat-label">Temperature</div>
         <div class="stat-value">
             {% if recent_parameters %}
@@ -239,7 +244,7 @@
             {% endif %}
         </div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card clickable" onclick="navigateTab('charts')">
         <div class="stat-label">pH Level</div>
         <div class="stat-value">
             {% if recent_parameters %}
@@ -249,11 +254,11 @@
             {% endif %}
         </div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card clickable" onclick="navigateTab('fish')">
         <div class="stat-label">Total Fish</div>
-        <div class="stat-value">{{ fish_count }}</div>
+        <div class="stat-value" style="font-size: 1.8rem;">{{ fish_held }} <span class="stat-unit">held</span> / {{ fish_planned }} <span class="stat-unit">planned</span></div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card clickable" onclick="navigateTab('schedule')">
         <div class="stat-label">Upcoming Tasks</div>
         <div class="stat-value">{{ upcoming_tasks|length }}</div>
     </div>
@@ -333,6 +338,7 @@
             <button onclick="loadChart(7)" class="chart-period">7 Days</button>
             <button onclick="loadChart(30)" class="chart-period active">30 Days</button>
             <button onclick="loadChart(90)" class="chart-period">90 Days</button>
+            <button onclick="exportCSV()" class="chart-period" style="margin-left: 10px;">📥 Export CSV</button>
         </div>
         <div class="chart-container">
             <canvas id="parametersChart"></canvas>
@@ -452,8 +458,12 @@
                 <input type="text" name="common_name" placeholder="Betta fish" class="form-control">
             </div>
             <div class="form-group">
-                <label class="form-label">Quantity</label>
-                <input type="number" name="quantity" min="1" value="1" class="form-control">
+                <label class="form-label">Held</label>
+                <input type="number" name="held" min="0" value="0" class="form-control">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Planned</label>
+                <input type="number" name="planned" min="0" value="0" class="form-control">
             </div>
             <div class="form-group">
                 <label class="form-label">Notes</label>
@@ -481,13 +491,22 @@
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
         
         document.getElementById(`tab-${tabName}`).classList.add('active');
-        event.target.classList.add('active');
+        // Highlight the matching tab button
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            if (btn.textContent.trim().toLowerCase() === tabName) btn.classList.add('active');
+        });
         
         if (tabName === 'charts') {
             loadChart(30);
         } else if (tabName === 'fish') {
             loadFish();
         }
+    }
+
+    function navigateTab(tabName) {
+        showTab(tabName);
+        // Scroll tabs into view
+        document.querySelector('.tabs').scrollIntoView({ behavior: 'smooth' });
     }
 
     // Aquarium switcher
@@ -584,18 +603,36 @@
                 return;
             }
             
-            container.innerHTML = fish.map(item => `
-                <div class="log-item">
-                    <div class="log-actions">
-                        <button class="btn btn-small btn-danger" onclick="deleteFish(${item.id})">Delete</button>
+            container.innerHTML = fish.map(item => {
+                const info = item.species_info || {};
+                const hasInfo = info.summary || info.native_range || info.biotope || info.temp_range || info.ph_range;
+                return `
+                <div class="log-item" style="display: flex; gap: 15px; align-items: flex-start; flex-wrap: wrap;" id="fish-${item.id}">
+                    ${item.image_url ? `<img src="${item.image_url}" alt="${item.species}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 10px; flex-shrink: 0;">` : `<div style="width: 80px; height: 80px; background: rgba(78,205,196,0.1); border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 2rem;">🐟</div>`}
+                    <div style="flex: 1; min-width: 0;">
+                        <div class="log-actions">
+                            <button class="btn btn-small btn-secondary" onclick="editFish(${item.id}, ${item.held}, ${item.planned})">Edit</button>
+                            <button class="btn btn-small btn-danger" onclick="deleteFish(${item.id})">Delete</button>
+                        </div>
+                        <div class="log-content">
+                            <strong>${item.species}</strong> ${item.common_name ? `(${item.common_name})` : ''}
+                            <div style="margin-top: 4px;"><span style="color: var(--seafoam);">${item.held} held</span> / <span style="color: var(--sand);">${item.planned} planned</span></div>
+                            <div class="log-timestamp">${new Date(item.added_date).toLocaleDateString()}</div>
+                            ${item.notes ? `<div style="margin-top: 4px; opacity: 0.8;">${item.notes}</div>` : ''}
+                            ${hasInfo ? `<div style="margin-top: 8px;">
+                                <button onclick="toggleInfo(${item.id})" class="btn btn-small btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;">ℹ️ Species Info</button>
+                                <div id="info-${item.id}" style="display: none; margin-top: 10px; padding: 12px; background: rgba(78,205,196,0.05); border: 1px solid rgba(78,205,196,0.15); border-radius: 8px; font-size: 0.85rem; line-height: 1.6;">
+                                    ${info.native_range ? `<div>🌍 <strong>Native Range:</strong> ${info.native_range}</div>` : ''}
+                                    ${info.biotope ? `<div>🏞️ <strong>Biotope:</strong> ${info.biotope}</div>` : ''}
+                                    ${info.temp_range ? `<div>🌡️ <strong>Temp Range:</strong> ${info.temp_range}</div>` : ''}
+                                    ${info.ph_range ? `<div>⚗️ <strong>pH Range:</strong> ${info.ph_range}</div>` : ''}
+                                    ${info.summary ? `<div style="margin-top: 8px; opacity: 0.85;">${info.summary}</div>` : ''}
+                                </div>
+                            </div>` : ''}
+                        </div>
                     </div>
-                    <div class="log-timestamp">${new Date(item.added_date).toLocaleDateString()}</div>
-                    <div class="log-content">
-                        <strong>${item.species}</strong> ${item.common_name ? `(${item.common_name})` : ''} - Qty: ${item.quantity}
-                        ${item.notes ? `<br>${item.notes}` : ''}
-                    </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         } catch (error) {
             console.error('Failed to load fish:', error);
         }
@@ -653,6 +690,36 @@
         }
     }
 
+    // CSV export
+    async function exportCSV() {
+        try {
+            const params = await api(`/api/aquarium/${currentAquariumId}/parameters`);
+            if (!params.length) { alert('No data to export'); return; }
+            
+            const headers = ['Date', 'Temperature (°F)', 'pH', 'Ammonia (ppm)', 'Nitrite (ppm)', 'Nitrate (ppm)', 'Notes'];
+            const rows = params.map(p => [
+                p.timestamp,
+                p.temperature ?? '',
+                p.ph ?? '',
+                p.ammonia ?? '',
+                p.nitrite ?? '',
+                p.nitrate ?? '',
+                (p.notes || '').replace(/"/g, '""')
+            ].map(v => `"${v}"`).join(','));
+            
+            const csv = [headers.join(','), ...rows].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `waterscribe-parameters-${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            alert('Failed to export');
+        }
+    }
+
     // Task type toggle
     function toggleTaskType() {
         const type = document.getElementById('task-type-select').value;
@@ -677,6 +744,33 @@
             } catch (error) {
                 alert('Failed to delete');
             }
+        }
+    }
+
+    function toggleInfo(id) {
+        const el = document.getElementById(`info-${id}`);
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function editFish(id, held, planned) {
+        const card = document.getElementById(`fish-${id}`);
+        const actions = card.querySelector('.log-actions');
+        actions.innerHTML = `
+            <label style="font-size: 0.85rem;">Held: <input type="number" id="edit-held-${id}" value="${held}" min="0" style="width: 60px; padding: 4px 8px; background: rgba(240,244,248,0.1); border: 1px solid var(--seafoam); border-radius: 4px; color: var(--pearl);"></label>
+            <label style="font-size: 0.85rem; margin-left: 8px;">Planned: <input type="number" id="edit-planned-${id}" value="${planned}" min="0" style="width: 60px; padding: 4px 8px; background: rgba(240,244,248,0.1); border: 1px solid var(--sand); border-radius: 4px; color: var(--pearl);"></label>
+            <button class="btn btn-small btn-primary" onclick="saveFish(${id})" style="margin-left: 8px;">Save</button>
+            <button class="btn btn-small btn-secondary" onclick="loadFish()">Cancel</button>
+        `;
+    }
+
+    async function saveFish(id) {
+        const held = parseInt(document.getElementById(`edit-held-${id}`).value) || 0;
+        const planned = parseInt(document.getElementById(`edit-planned-${id}`).value) || 0;
+        try {
+            await api(`/api/aquarium/${currentAquariumId}/fish`, 'PUT', { id, held, planned });
+            loadFish();
+        } catch (error) {
+            alert('Failed to update fish');
         }
     }
 

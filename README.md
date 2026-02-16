@@ -1,214 +1,100 @@
-# WaterScribe v2 - Multi-User Aquarium Tracking
+# 🐠 WaterScribe
 
-WaterScribe is a comprehensive aquarium management system with multi-user support, built with Flask and PostgreSQL.
+**Aquarium tracker for fishkeepers who care about their water.**
 
-## 🌊 Features
+![WaterScribe](icon.png)
 
-- **Multi-User Support**: Each user can manage multiple aquariums
-- **Water Parameters**: Track temperature, pH, ammonia, nitrite, nitrate with trends
-- **Maintenance Logging**: Record and track aquarium maintenance activities
-- **Scheduled Tasks**: Set up recurring or one-time maintenance reminders  
-- **Fish Inventory**: Keep track of fish species and quantities
-- **Charts & Analytics**: Visualize water parameter trends over time
-- **Responsive Design**: Works on desktop and mobile devices
-- **Docker Support**: Easy deployment with Docker Compose
+Track water parameters, schedule maintenance, manage fish inventory, and monitor your aquarium's health — all from a clean, mobile-friendly interface.
 
-## 🏗️ Architecture
+## Features
 
-- **Flask** with Blueprint architecture (auth, dashboard, api)
-- **PostgreSQL** database with SQLAlchemy ORM
-- **Flask-Login** for session management
-- **Flask-Migrate** for database migrations
-- **Gunicorn** WSGI server behind nginx reverse proxy
-- **Docker Compose** for orchestration
+- **Water Parameters** — Log temperature, pH, ammonia, nitrite, nitrate with timestamps and notes
+- **Charts** — Visualize parameter trends over 7/30/90 days with multi-axis Chart.js graphs
+- **Scheduled Tasks** — Recurring and one-time maintenance reminders
+- **Fish Inventory** — Track species with held/planned counts, auto-fetched Wikipedia thumbnails and species info
+- **Maintenance Log** — Record water changes, filter cleanings, equipment checks
+- **Multi-Aquarium** — Manage multiple tanks from one account
+- **CSV Export** — Export parameter data for external analysis
+- **PWA** — Install as a standalone app on iOS/Android from the browser
+- **Slack Notifications** — Optional DMs for due/overdue tasks and new task alerts
 
-## 🚀 Quick Start
+## Screenshots
 
-### 1. Clone and Setup
+The UI features a dark ocean theme with animated bubbles, gradient accents, and a responsive layout that works great on phones.
+
+## Tech Stack
+
+- **Backend:** Python 3 / Flask / SQLAlchemy / PostgreSQL
+- **Frontend:** Vanilla HTML/CSS/JS / Chart.js
+- **Auth:** Flask-Login + bcrypt
+- **Deployment:** Gunicorn + Nginx + systemd
+- **PWA:** Service worker + Web App Manifest
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.10+
+- PostgreSQL
+
+### Setup
 
 ```bash
-git clone https://github.com/rfcampbell/waterscribe-dev.git
-cd waterscribe-dev
-git checkout v2-multiuser
-```
+# Clone
+git clone https://github.com/rfcampbell/Waterscribe.git
+cd Waterscribe
 
-### 2. Environment Configuration
+# Virtual environment
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 
-```bash
+# Configure
 cp .env.example .env
-# Edit .env with your secrets:
-# - Generate a secure SECRET_KEY
-# - Set a strong POSTGRES_PASSWORD
-```
+# Edit .env with your database credentials and secret key
 
-### 3. Run with Docker Compose
-
-```bash
-docker-compose up --build
-```
-
-The application will be available at http://localhost
-
-### 4. Initialize Database
-
-```bash
-# Run migrations inside the container
-docker-compose exec web python -m flask db upgrade
-
-# OR run the container interactively
-docker-compose exec web bash
-flask db upgrade
-```
-
-## 📊 Migration from v1
-
-If you have an existing `aquarium.db` from the single-user version:
-
-```bash
-# Make sure aquarium.db is in the project root
-docker-compose exec web python migrate_from_sqlite.py
-```
-
-This creates:
-- Default user: `admin@waterscribe.local` 
-- Default password: `waterscribe123` (⚠️ **CHANGE THIS!**)
-- Migrates all existing data to the new schema
-
-## 🛠️ Development Setup
-
-### Local Development (without Docker)
-
-1. **Install Dependencies**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-2. **Database Setup**
-   ```bash
-   # Install PostgreSQL locally or use Docker for just the DB
-   docker run --name postgres-dev -e POSTGRES_PASSWORD=dev -p 5432:5432 -d postgres:16
-   
-   # Set DATABASE_URL in .env
-   export DATABASE_URL=postgresql://postgres:dev@localhost:5432/waterscribe_dev
-   ```
-
-3. **Initialize Flask App**
-   ```bash
-   export FLASK_APP=wsgi.py
-   export FLASK_ENV=development
-   flask db upgrade
-   flask run
-   ```
-
-### Database Migrations
-
-```bash
-# Create a new migration
-flask db migrate -m "Description of changes"
-
-# Apply migrations
+# Database setup
+createdb waterscribe
 flask db upgrade
 
-# Downgrade if needed
-flask db downgrade
+# Run
+flask run
 ```
 
-## 📁 Project Structure
+### Production Deployment
 
-```
-waterscribe/
-├── app/
-│   ├── __init__.py          # Application factory
-│   ├── config.py            # Configuration classes  
-│   ├── models.py            # SQLAlchemy models
-│   ├── auth/                # Authentication blueprint
-│   │   ├── __init__.py
-│   │   ├── routes.py        # Login, register, logout
-│   │   └── forms.py         # WTForms
-│   ├── dashboard/           # Main UI blueprint
-│   │   ├── __init__.py
-│   │   └── routes.py        # Dashboard, aquarium management
-│   ├── api/                 # JSON API blueprint
-│   │   ├── __init__.py
-│   │   └── routes.py        # CRUD operations, charts
-│   ├── templates/
-│   │   ├── base.html        # Base template with ocean theme
-│   │   ├── auth/            # Login/register pages
-│   │   └── dashboard/       # Main application UI
-│   └── static/              # CSS, JavaScript, assets
-├── migrations/              # Database migrations
-├── docker-compose.yml       # Multi-service orchestration
-├── Dockerfile              # App container definition
-├── nginx.conf              # Reverse proxy configuration
-├── requirements.txt        # Python dependencies
-├── wsgi.py                 # WSGI entry point
-├── migrate_from_sqlite.py  # v1 to v2 migration script
-└── README.md               # This file
+```bash
+# Install gunicorn
+pip install gunicorn
+
+# Run with gunicorn
+gunicorn --workers 3 --bind 127.0.0.1:5000 wsgi:app
 ```
 
-## 🎨 UI/UX
+See `deploy/` directory for nginx config and systemd service file examples.
 
-- **Dark Ocean Theme**: Deep blues and seafoam greens
-- **Responsive Design**: Works on phones, tablets, desktop
-- **Animated Background**: Floating bubbles for ambiance
-- **Intuitive Navigation**: Tab-based interface for different functions
-- **Real-time Charts**: Interactive parameter trend visualization
+### Slack Notifications (Optional)
 
-## 🔐 Security
+Add `SLACK_BOT_TOKEN` and `SLACK_NOTIFY_USER` to your `.env` to enable:
+- DM notifications when scheduled tasks are created
+- Periodic due/overdue task alerts via `check_tasks.py` (run via cron)
 
-- **Password Hashing**: Bcrypt for secure password storage
-- **Session Management**: Flask-Login with secure cookies
-- **CSRF Protection**: Built-in with Flask-WTF
-- **SQL Injection Prevention**: SQLAlchemy ORM
-- **XSS Protection**: Jinja2 template auto-escaping
-- **Docker Security**: Non-root user, minimal attack surface
+```bash
+# Example crontab entry (8am, 12pm, 5pm)
+0 8,12,17 * * * /path/to/venv/bin/python3 /path/to/check_tasks.py
+```
 
-## 📈 API Endpoints
+## Environment Variables
 
-All API endpoints require authentication and are scoped to user's aquariums:
+| Variable | Required | Description |
+|---|---|---|
+| `SECRET_KEY` | Yes | Flask session secret |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `FLASK_ENV` | No | `development` or `production` |
+| `SESSION_COOKIE_SECURE` | No | Set `true` for HTTPS |
+| `SLACK_BOT_TOKEN` | No | Slack bot token for notifications |
+| `SLACK_NOTIFY_USER` | No | Slack user ID for DM notifications |
 
-- `GET/POST/DELETE /api/aquarium/{id}/parameters` - Water parameters
-- `GET/POST/DELETE /api/aquarium/{id}/maintenance` - Maintenance log  
-- `GET/POST/PUT/DELETE /api/aquarium/{id}/scheduled` - Scheduled tasks
-- `GET/POST/DELETE /api/aquarium/{id}/fish` - Fish inventory
-- `GET /api/aquarium/{id}/parameters/chart` - Chart data
-- `GET /api/aquarium/{id}/stats` - Summary statistics
+## License
 
-## 🐳 Docker Services
-
-- **web**: Flask application with Gunicorn
-- **db**: PostgreSQL 16 database
-- **nginx**: Reverse proxy and static file serving
-
-## 🔧 Configuration
-
-Environment variables:
-
-- `SECRET_KEY`: Flask secret key (required)
-- `POSTGRES_PASSWORD`: Database password (required)
-- `DATABASE_URL`: Full database connection string
-- `FLASK_ENV`: development/production
-- `SESSION_COOKIE_SECURE`: HTTPS cookie flag
-
-## 📝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make changes with tests
-4. Submit a pull request
-
-## 📄 License
-
-MIT License - see LICENSE file for details
-
-## 🆘 Support
-
-- 📧 Issues: GitHub Issues
-- 📖 Documentation: This README and code comments
-- 🐛 Bug Reports: Please include steps to reproduce
-
----
-
-Built with 🌊 for aquarium enthusiasts
+MIT

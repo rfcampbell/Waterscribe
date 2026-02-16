@@ -152,20 +152,33 @@ class FishInventory(db.Model):
     aquarium_id = db.Column(db.Integer, db.ForeignKey('aquariums.id'), nullable=False, index=True)
     species = db.Column(db.String(100), nullable=False)
     common_name = db.Column(db.String(100))
-    quantity = db.Column(db.Integer, default=1, nullable=False)
+    held = db.Column(db.Integer, default=0, nullable=False)
+    planned = db.Column(db.Integer, default=0, nullable=False)
     added_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     notes = db.Column(db.Text)
+    image_url = db.Column(db.Text)
+    species_info = db.Column(db.Text)  # JSON blob
     
     def to_dict(self):
         """Convert to dictionary for JSON responses"""
+        import json as _json
+        info = None
+        if self.species_info:
+            try:
+                info = _json.loads(self.species_info)
+            except Exception:
+                pass
         return {
             'id': self.id,
             'aquarium_id': self.aquarium_id,
             'species': self.species,
             'common_name': self.common_name,
-            'quantity': self.quantity,
+            'held': self.held,
+            'planned': self.planned,
             'added_date': self.added_date.isoformat() if self.added_date else None,
-            'notes': self.notes
+            'notes': self.notes,
+            'image_url': self.image_url,
+            'species_info': info
         }
     
     def __repr__(self):

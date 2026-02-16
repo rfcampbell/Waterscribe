@@ -8,7 +8,8 @@
     <meta name="apple-mobile-web-app-title" content="WaterScribe">
     <meta name="theme-color" content="#0a1628">
     <link rel="manifest" href="/static/manifest.json">
-    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
     <title>{% if title %}{{ title }} - {% endif %}WaterScribe</title>
     
     <!-- Fonts -->
@@ -156,13 +157,14 @@
         }
 
         .btn-danger {
-            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
-            color: white;
+            background: transparent;
+            color: #e08080;
+            border: 1px solid rgba(224, 128, 128, 0.3);
         }
 
         .btn-danger:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(255, 107, 107, 0.3);
+            background: rgba(224, 128, 128, 0.1);
+            color: #f09090;
         }
 
         /* Flash messages */

@@ -42,7 +42,10 @@ def index():
         aquarium_id=selected_aquarium.id
     ).order_by(MaintenanceLog.timestamp.desc()).limit(10).all()
     
-    fish_count = db.session.query(db.func.sum(FishInventory.quantity)).filter_by(
+    fish_held = db.session.query(db.func.sum(FishInventory.held)).filter_by(
+        aquarium_id=selected_aquarium.id
+    ).scalar() or 0
+    fish_planned = db.session.query(db.func.sum(FishInventory.planned)).filter_by(
         aquarium_id=selected_aquarium.id
     ).scalar() or 0
     
@@ -52,7 +55,8 @@ def index():
                          recent_parameters=recent_parameters,
                          upcoming_tasks=upcoming_tasks,
                          recent_maintenance=recent_maintenance,
-                         fish_count=fish_count)
+                         fish_held=fish_held,
+                         fish_planned=fish_planned)
 
 @bp.route('/aquarium/<int:aquarium_id>')
 @login_required

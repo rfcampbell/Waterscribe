@@ -2,12 +2,15 @@
 API routes - JSON API for charts and CRUD operations
 All operations are scoped to the current user's aquariums
 """
+import json
 from flask import jsonify, request
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 
 from app.api import bp
 from app.models import db, Aquarium, WaterParameter, MaintenanceLog, ScheduledTask, FishInventory
+from app.notifications import notify_task_created
+from app.fish_images import fetch_fish_image, fetch_species_info
 
 def get_user_aquarium(aquarium_id):
     """Helper to get aquarium that belongs to current user"""
@@ -169,6 +172,11 @@ def scheduled_tasks(aquarium_id):
         try:
             db.session.add(task)
             db.session.commit()
+            # Send Slack notification
+            try:
+                notify_task_created(task, aquarium.name)
+            except Exception:
+                pass  # Don't fail the request if notification fails
             return jsonify({'success': True, 'id': task.id})
         except Exception as e:
             db.session.rollback()
@@ -239,7 +247,7 @@ def scheduled_tasks(aquarium_id):
         return jsonify([task.to_dict() for task in tasks])
 
 # Fish Inventory API
-@bp.route('/aquarium/<int:aquarium_id>/fish', methods=['GET', 'POST', 'DELETE'])
+@bp.route('/aquarium/<int:aquarium_id>/fish', methods=['GET', 'POST', 'PUT', 'DELETE'])
 @login_required
 def fish_inventory(aquarium_id):
     """Handle fish inventory for a specific aquarium"""
@@ -249,18 +257,65 @@ def fish_inventory(aquarium_id):
     
     if request.method == 'POST':
         data = request.json
+        # Fetch thumbnail from Wikipedia
+        image_url = None
+        try:
+            image_url = fetch_fish_image(data['species'], data.get('common_name'))
+        except Exception:
+            pass
+        
+        # Fetch species info from Wikipedia
+        species_info = None
+        try:
+            info = fetch_species_info(data['species'], data.get('common_name'))
+            if info:
+                species_info = json.dumps(info)
+        except Exception:
+            pass
+        
         fish = FishInventory(
             aquarium_id=aquarium_id,
             species=data['species'],
             common_name=data.get('common_name'),
-            quantity=data.get('quantity', 1),
-            notes=data.get('notes')
+            held=data.get('held', 0),
+            planned=data.get('planned', 0),
+            notes=data.get('notes'),
+            image_url=image_url,
+            species_info=species_info
         )
         
         try:
             db.session.add(fish)
             db.session.commit()
             return jsonify({'success': True, 'id': fish.id})
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': str(e)}), 400
+    
+    elif request.method == 'PUT':
+        data = request.json
+        fish_id = data.get('id')
+        if not fish_id:
+            return jsonify({'success': False, 'error': 'Fish ID required'}), 400
+        
+        fish = FishInventory.query.filter_by(id=fish_id, aquarium_id=aquarium_id).first()
+        if not fish:
+            return jsonify({'success': False, 'error': 'Fish not found'}), 404
+        
+        if 'held' in data:
+            fish.held = data['held']
+        if 'planned' in data:
+            fish.planned = data['planned']
+        if 'species' in data:
+            fish.species = data['species']
+        if 'common_name' in data:
+            fish.common_name = data['common_name']
+        if 'notes' in data:
+            fish.notes = data['notes']
+        
+        try:
+            db.session.commit()
+            return jsonify({'success': True})
         except Exception as e:
             db.session.rollback()
             return jsonify({'success': False, 'error': str(e)}), 400
