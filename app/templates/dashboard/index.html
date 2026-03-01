@@ -794,13 +794,53 @@
         }
     }
 
-    // Create aquarium placeholder
+    // Delete scheduled task
+    async function deleteTask(id) {
+        if (confirm('Delete this scheduled task?')) {
+            try {
+                await api(`/api/aquarium/${currentAquariumId}/scheduled?id=${id}`, 'DELETE');
+                location.reload();
+            } catch (error) {
+                alert('Failed to delete task');
+            }
+        }
+    }
+
+    // Delete maintenance entry
+    async function deleteMaintenance(id) {
+        if (confirm('Delete this maintenance entry?')) {
+            try {
+                await api(`/api/aquarium/${currentAquariumId}/maintenance?id=${id}`, 'DELETE');
+                location.reload();
+            } catch (error) {
+                alert('Failed to delete');
+            }
+        }
+    }
+
+    // Create aquarium
     function showCreateAquarium() {
         const name = prompt('Enter aquarium name:');
-        if (name) {
-            // TODO: Implement proper create aquarium modal
-            alert('Aquarium creation will be implemented in the next step');
-        }
+        if (!name) return;
+        const volume = prompt('Volume in gallons (optional):');
+        
+        const data = { name };
+        if (volume) data.volume_gallons = volume;
+        
+        fetch('{{ url_for("dashboard.create_aquarium") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                window.location.href = `{{ url_for('dashboard.index') }}?aquarium_id=${result.id}`;
+            } else {
+                alert('Failed to create aquarium: ' + (result.error || 'Unknown error'));
+            }
+        })
+        .catch(() => alert('Failed to create aquarium'));
     }
 </script>
 {% endblock %}
