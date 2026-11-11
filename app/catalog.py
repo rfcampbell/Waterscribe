@@ -34,6 +34,10 @@ EVENT_TYPES = {
     'co2_bubble_rate':     ('CO2 bubble rate', 'bubbles/30s'),
     'fertilizer_dose':     ('Fertilizer dose set', 'ml/day'),
     'dose':                ('One-off dose', 'ml'),
+    'ammonia_dose':        ('Ammonia dose', 'ppm'),
+    'livestock_added':     ('Livestock added', 'fish'),
+    'filter_seeded':       ('Filter seeded', None),
+    'cycle_complete':      ('Cycle complete', None),
     'drop_checker_refill': ('Drop checker refill', None),
     'equipment':           ('Equipment change', None),
     'filter_clean':        ('Filter cleaning', None),
@@ -50,3 +54,10 @@ QUALITIES = ('ok', 'suspect', 'bad')
 def norm_unit(u):
     """Compare units loosely: 'uS/cm' == 'µS/cm', case and spaces ignored."""
     return (u or '').replace('µ', 'u').replace(' ', '').lower()
+
+# Imported units that convert to the catalog unit: (parameter, normalized unit) -> divisor.
+# KH/GH in ppm (as CaCO3) -> degrees; 1 dKH = 1 dGH = 17.848 ppm.
+UNIT_CONVERSIONS = {
+    ('kh', 'ppm'): 17.848,
+    ('gh', 'ppm'): 17.848,
+}

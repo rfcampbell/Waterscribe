@@ -7,7 +7,7 @@ import csv
 import io
 from datetime import datetime, date, time
 
-from app.catalog import PARAMETERS, EVENT_TYPES, QUALITIES, norm_unit
+from app.catalog import PARAMETERS, EVENT_TYPES, QUALITIES, UNIT_CONVERSIONS, norm_unit
 from app.utils import parse_number
 
 READING_COLUMNS = ['date', 'time', 'tank', 'parameter', 'value', 'value_min', 'value_max',
@@ -118,17 +118,28 @@ def events_csv(events, tank):
 EVENT_ALIASES = {
     'fertilizer_dose_set': ('fertilizer_dose', None),
     'dosing_pump_installed': ('equipment', 'Dosing pump installed'),
+    'shells_removed': ('other', 'Shells removed'),
 }
 
 
 def reading_from_csv_row(row):
-    """CSV dict -> (timestamp, time_known, cleaned reading). Checks the unit matches the catalog."""
+    """CSV dict -> (timestamp, time_known, cleaned reading). The unit must match the catalog or
+    have a conversion in UNIT_CONVERSIONS; converted readings keep the original in their note."""
     ts, known = parse_when(row.get('date'), row.get('time'))
     key = (row.get('parameter') or '').strip().lower()
     cleaned = clean_reading({**row, 'parameter': key})
-    expected = PARAMETERS[key][1]
-    if row.get('unit') and norm_unit(row['unit']) != norm_unit(expected):
-        raise ValueError(f'unit {row["unit"]!r} for {key} (expected {expected!r})')
+    expected, unit = PARAMETERS[key][1], (row.get('unit') or '').strip()
+    if unit and norm_unit(unit) != norm_unit(expected):
+        divisor = UNIT_CONVERSIONS.get((key, norm_unit(unit)))
+        if not divisor:
+            raise ValueError(f'unit {unit!r} for {key} (expected {expected!r})')
+        orig = _fmt(cleaned['value']) + (f" ({_fmt(cleaned['value_min'])}–{_fmt(cleaned['value_max'])})"
+                                          if cleaned['value_min'] is not None or cleaned['value_max'] is not None else '')
+        for f in ('value', 'value_min', 'value_max'):
+            if cleaned[f] is not None:
+                cleaned[f] = round(cleaned[f] / divisor, 2)
+        note = f'converted from {orig} {unit}'
+        cleaned['notes'] = f"{cleaned['notes']}; {note}" if cleaned['notes'] else note
     return ts, known, cleaned
 
 
