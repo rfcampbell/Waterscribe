@@ -148,8 +148,9 @@ class ReadingIn(BaseModel):
     value: float = Field(description='The reading. For a range like "10-20", give the midpoint and set value_min/value_max.')
     value_min: float | None = Field(None, description='Low end when the test gives a range (color charts).')
     value_max: float | None = Field(None, description='High end when the test gives a range.')
-    unit: str | None = Field(None, description='Unit as measured. Omit to mean the catalog unit. KH/GH in ppm '
-                                               'are converted to degrees; any other mismatch is rejected.')
+    unit: str | None = Field(None, description='Unit as measured. Omit to mean the catalog unit. KH/GH as '
+                                               'ppm/mg/L (CaCO3) are converted to degrees; bare ppm for nitrate or '
+                                               'phosphate means as NO3/PO4; any other mismatch is rejected.')
     method: str | None = Field(None, description='Test kit or meter, e.g. "API", "Salifert", "Hanna".')
     quality: str | None = Field(None, description='ok (default), suspect, or bad. Bad readings are hidden on charts.')
     notes: str | None = None
@@ -165,7 +166,10 @@ mcp = MCPServer(
     name='WaterScribe',
     instructions='Logs aquarium water-test readings and maintenance events to WaterScribe. Insert-only: '
                  'nothing can be edited or deleted from here (mistakes get fixed in the WaterScribe UI). '
-                 'Tanks are named by code (list_tanks). Times are the tank\'s local time.',
+                 'Tanks are named by code (list_tanks). Times are the tank\'s local time. '
+                 'Each parameter has a plausible range (list_parameters). If a reading is rejected as '
+                 'outside it, or for its unit, ask the user what they measured. Never change the '
+                 'value or unit yourself to get it accepted.',
     auth_server_provider=(provider := oauth.Provider(STATE, RESOURCE, audit)),
     auth=AuthSettings(
         issuer_url=PUBLIC, resource_server_url=RESOURCE, validate_token_resource=True,
@@ -267,22 +271,25 @@ async def login(request):
 
 @mcp.custom_route('/healthz', methods=['GET'])
 async def healthz(request):
-    """Public and unauthenticated: says only whether this server and the WaterScribe API answer.
-    CORS-open so the robix services page can show a real status dot."""
+    """Public and unauthenticated, so it says only ok or not: this server and the WaterScribe API
+    both answered (live, uncached). Per-component detail is on robix nginx, LAN only."""
     from starlette.responses import JSONResponse
     try:
-        await api('GET', '/catalog')     # uncached: a cached answer would stay green after the API died
-        api_ok = True
+        await api('GET', '/catalog')
+        ok = True
     except ToolError:
-        api_ok = False
-    return JSONResponse({'ok': api_ok, 'waterscribe_api': api_ok}, status_code=200 if api_ok else 503,
+        ok = False
+    return JSONResponse({'ok': ok}, status_code=200 if ok else 503,
                         headers={'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store'})
 
 
+def transport_security():
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[urlparse(PUBLIC).netloc, f'127.0.0.1:{PORT}', f'localhost:{PORT}'],
+        allowed_origins=[PUBLIC, 'https://claude.ai', 'https://claude.com'])
+
+
 if __name__ == '__main__':
-    host = urlparse(PUBLIC).netloc
     mcp.run('streamable-http', host='127.0.0.1', port=PORT, streamable_http_path='/mcp',
-            transport_security=TransportSecuritySettings(
-                enable_dns_rebinding_protection=True,
-                allowed_hosts=[host, f'127.0.0.1:{PORT}', f'localhost:{PORT}'],
-                allowed_origins=[PUBLIC, 'https://claude.ai', 'https://claude.com']))
+            transport_security=transport_security())

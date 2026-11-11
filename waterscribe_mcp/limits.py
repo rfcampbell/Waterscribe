@@ -3,8 +3,9 @@ Failed-login limiter for the public /login page: per client IP and across all IP
 
 LIMIT failures within WINDOW seconds locks that key (an IP, or 'global') for BASE_LOCK seconds,
 doubling with each further lockout up to MAX_LOCK. The backoff level resets once a key has gone
-LEVEL_RESET seconds without a lockout. State is saved to disk so a restart does not clear it;
-delete the file (and restart) to clear a lockout by hand.
+LEVEL_RESET seconds without a lockout. State is saved to disk so a restart does not clear it.
+The file is re-read whenever it changes, so `clear-lockouts` takes effect without a restart.
+Only the /login passphrase check uses this; bearer tokens and token grants never consult it.
 """
 import json
 import os
@@ -22,12 +23,28 @@ class LoginLimiter:
     def __init__(self, path, clock=time.time, per_ip=PER_IP, global_=GLOBAL):
         self.path, self.clock = Path(path), clock
         self.limits = {'ip': per_ip, 'global': global_}
+        self._stamp = None
+        self._sync()
+
+    def _file_stamp(self):
+        try:
+            st = self.path.stat()
+            return (st.st_mtime_ns, st.st_size, st.st_ino)
+        except OSError:
+            return None
+
+    def _sync(self):
+        """Reload if the file changed under us (clear-lockouts, or deleted by hand)."""
+        stamp = self._file_stamp()
+        if stamp is not None and stamp == self._stamp:
+            return
         try:
             self.s = json.loads(self.path.read_text())
         except (OSError, ValueError):
             self.s = {}
         self.s.setdefault('ip', {})
         self.s.setdefault('global', {})
+        self._stamp = stamp
 
     def _entry(self, kind, key):
         bucket = self.s[kind] if kind == 'ip' else self.s
@@ -35,6 +52,7 @@ class LoginLimiter:
 
     def locked(self, ip):
         """'ip' or 'global' if a lockout is in force for this request, else None."""
+        self._sync()
         now = self.clock()
         if self.s['global'].get('locked_until', 0) > now:
             return 'global'
@@ -44,6 +62,7 @@ class LoginLimiter:
 
     def fail(self, ip):
         """Record a failure. Returns a list of lockouts it triggered: [(scope, seconds, level)]."""
+        self._sync()
         now, started = self.clock(), []
         for kind, e in (('ip', self._entry('ip', ip)), ('global', self.s['global'])):
             e.setdefault('fails', []); e.setdefault('level', 0); e.setdefault('last_lock', 0)
@@ -60,11 +79,13 @@ class LoginLimiter:
         return started
 
     def counts(self, ip):
+        self._sync()
         return {'ip_fails': len(self.s['ip'].get(ip, {}).get('fails', [])),
                 'global_fails': len(self.s['global'].get('fails', []))}
 
     def success(self, ip):
         """A correct passphrase clears that IP's failures and backoff (not the global ones)."""
+        self._sync()
         if self.s['ip'].pop(ip, None) is not None:
             self._save()
 
@@ -78,6 +99,27 @@ class LoginLimiter:
         with os.fdopen(fd, 'w') as f:
             json.dump(self.s, f)
         os.replace(tmp, self.path)
+        self._stamp = self._file_stamp()
+
+    def status(self):
+        """Active lockouts and recent failures, for the clear-lockouts CLI."""
+        self._sync()
+        now = self.clock()
+        rows = [('global', self.s['global'])] + sorted(self.s['ip'].items())
+        return [{'scope': k, 'locked_for_s': max(0, int(e.get('locked_until', 0) - now)),
+                 'level': e.get('level', 0), 'recent_fails': len(e.get('fails', []))}
+                for k, e in rows if e]
+
+    def clear(self, ip=None):
+        """Drop lockouts, failures and backoff: for one IP, or everything (including global)."""
+        self._sync()
+        if ip:
+            found = self.s['ip'].pop(ip, None) is not None
+        else:
+            found = bool(self.s['ip'] or self.s['global'])
+            self.s = {'ip': {}, 'global': {}}
+        self._save()
+        return found
 
 
 def client_ip(request):

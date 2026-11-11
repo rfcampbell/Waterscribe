@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+"""Show or clear /login lockouts. Takes effect immediately; no restart needed.
+  venv/bin/python clear-lockouts            show lockouts and recent failures
+  venv/bin/python clear-lockouts --all      clear everything, global included
+  venv/bin/python clear-lockouts --ip IP    clear one IP"""
+import argparse, json, os, sys
+from datetime import datetime
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from limits import LoginLimiter
+
+ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+g = ap.add_mutually_exclusive_group()
+g.add_argument('--all', action='store_true')
+g.add_argument('--ip')
+ap.add_argument('--state', default=os.environ.get('WATERSCRIBE_MCP_STATE', Path.home() / '.local/state/waterscribe-mcp'))
+a = ap.parse_args()
+state = Path(a.state)
+lim = LoginLimiter(state / 'login_limits.json')
+
+def show():
+    rows = lim.status()
+    if not rows:
+        print('no lockouts or recent failures')
+    for r in rows:
+        lock = f"LOCKED {r['locked_for_s'] // 60} min more" if r['locked_for_s'] else 'not locked'
+        print(f"{r['scope']:<40} {lock:<22} level {r['level']}  recent failures {r['recent_fails']}")
+
+if not (a.all or a.ip):
+    show(); sys.exit()
+found = lim.clear(a.ip)
+with open(state / 'audit.jsonl', 'a') as f:     # same audit trail as the server
+    f.write(json.dumps({'ts': datetime.now().astimezone().isoformat(timespec='seconds'),
+                        'kind': 'oauth.lockouts_cleared', 'scope': a.ip or 'all', 'by': 'clear-lockouts'}) + '\n')
+print(('cleared ' if found else 'nothing to clear for ') + (a.ip or 'all'))
+show()

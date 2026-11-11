@@ -10,7 +10,7 @@ from app.models import db, Aquarium, Reading, Event, ScheduledTask, FishInventor
 from app.notifications import notify_task_created
 from app.fish_images import fetch_fish_image, fetch_species_info
 from app.utils import parse_number
-from app.catalog import PARAMETERS, EVENT_TYPES, CHART_GROUPS, QUALITIES, UNIT_CONVERSIONS
+from app.catalog import PARAMETERS, EVENT_TYPES, CHART_GROUPS, QUALITIES, UNIT_CONVERSIONS, RANGES
 from app.records import (clean_reading, clean_event, when_from_json, readings_csv, events_csv,
                          apply_reading_unit, check_event_unit)
 
@@ -44,7 +44,8 @@ def list_aquariums():
 def catalog():
     return jsonify({
         'parameters': [{'key': k, 'label': p[0], 'unit': p[1],
-                        'also_accepts': [u for (pk, u) in UNIT_CONVERSIONS if pk == k]}
+                        'converts_from': list(UNIT_CONVERSIONS[k][1]) if k in UNIT_CONVERSIONS else [],
+                        'plausible_range': list(RANGES[k]) if k in RANGES else None}
                        for k, p in PARAMETERS.items()],
         'event_types': [{'key': k, 'label': e[0], 'unit': e[1]} for k, e in EVENT_TYPES.items()],
         'qualities': list(QUALITIES),
@@ -82,7 +83,7 @@ def readings(aquarium_id):
             return _err('Reading not found', 404)
         try:
             ts, known = when_from_json(data)
-            cleaned = clean_reading(data)
+            cleaned = apply_reading_unit(clean_reading(data), data.get('unit'))
         except ValueError as e:
             return _err(str(e))
         reading.timestamp, reading.time_known = ts, known

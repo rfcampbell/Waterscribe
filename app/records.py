@@ -7,7 +7,7 @@ import csv
 import io
 from datetime import datetime, date, time
 
-from app.catalog import PARAMETERS, EVENT_TYPES, QUALITIES, UNIT_CONVERSIONS, norm_unit, units_match
+from app.catalog import PARAMETERS, EVENT_TYPES, QUALITIES, RANGES, conversion_divisor, units_match
 from app.utils import parse_number
 
 READING_COLUMNS = ['date', 'time', 'tank', 'parameter', 'value', 'value_min', 'value_max',
@@ -128,8 +128,8 @@ def apply_reading_unit(cleaned, unit):
     key, unit = cleaned['parameter'], (unit or '').strip()
     expected = PARAMETERS[key][1]
     if not unit or units_match(unit, expected):
-        return cleaned
-    divisor = UNIT_CONVERSIONS.get((key, norm_unit(unit)))
+        return check_range(cleaned)
+    divisor = conversion_divisor(key, unit)
     if not divisor:
         raise ValueError(f'{PARAMETERS[key][0]}: unit {unit!r} not accepted (use {expected!r})')
     orig = _fmt(cleaned['value']) + (f" ({_fmt(cleaned['value_min'])}–{_fmt(cleaned['value_max'])})"
@@ -139,6 +139,24 @@ def apply_reading_unit(cleaned, unit):
             cleaned[f] = round(cleaned[f] / divisor, 2)
     note = f'converted from {orig} {unit}'
     cleaned['notes'] = f"{cleaned['notes']}; {note}" if cleaned['notes'] else note
+    return check_range(cleaned, converted_from=f'{orig} {unit}')
+
+
+def check_range(cleaned, converted_from=None):
+    """Reject a value, min or max outside the parameter's plausible range (catalog.RANGES)."""
+    key = cleaned['parameter']
+    if key not in RANGES:
+        return cleaned
+    lo, hi = RANGES[key]
+    label, unit = PARAMETERS[key][0], PARAMETERS[key][1]
+    unit_s = '' if unit == label else f' {unit}'
+    for f in ('value', 'value_min', 'value_max'):
+        v = cleaned[f]
+        if v is not None and not lo <= v <= hi:
+            what = {'value': '', 'value_min': ' (range low end)', 'value_max': ' (range high end)'}[f]
+            src = f', converted from {converted_from}' if converted_from else ''
+            raise ValueError(f'{label} {_fmt(v)}{unit_s}{what}{src} is outside the plausible range '
+                             f'{_fmt(lo)}–{_fmt(hi)}{unit_s}; not saved. Check the value and unit.')
     return cleaned
 
 

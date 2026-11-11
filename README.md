@@ -84,8 +84,8 @@ venv/bin/python import_csv.py events.csv --aquarium 100p
 Readings columns: `date,time,tank,parameter,value,value_min,value_max,unit,method,quality,notes`.
 Events columns: `date,time,tank,event,value,unit,notes`. The kind is detected from the header,
 and `tank` selects the aquarium by name unless `--aquarium` is given. Blank `time` means the time
-is unknown (stored at 12:00, shown as date only). Units are checked against `app/catalog.py`;
-KH/GH given in ppm are converted to degrees (÷17.848) with the original value kept in the note.
+is unknown (stored at 12:00, shown as date only). Units and values are checked as described
+under *Units and plausible ranges* below.
 Any invalid row aborts the whole file; rows already stored are skipped, so re-running is safe.
 Times are local wall-clock time, not UTC.
 
@@ -102,6 +102,25 @@ systemctl list-timers waterscribe-backup.timer          # next/last run
 journalctl -u waterscribe-backup -n 5                   # last result
 pg_restore --clean --if-exists --no-owner -d "$DATABASE_URL" ~/waterscribe-backups/<dump>   # restore
 ```
+
+### Units and plausible ranges
+
+One set of rules, in `app/catalog.py` and `app/records.py`, applies to the web form, CSV import,
+the API and the MCP server:
+
+- **Conversions:** KH/GH given as `ppm`, `mg/L`, `ppm CaCO3` or `mg/L CaCO3` are divided by
+  17.848 to give dKH/dGH. The original value is kept in the note.
+- **Same unit, different spelling:** a blank unit means the catalog unit. Case, spaces, `µ`/`u`, a
+  leading `°` and `ppm as X` are ignored. `mg/L` counts as `ppm`. A bare `ppm` for nitrate,
+  phosphate, potassium or iron is taken as NO3, PO4, K or Fe. `percent` counts as `%`.
+- **Rejected:** any other unit, for example `ppm NO3-N`, `ppm P`, `mS/cm`, `°C`, `meq/L`.
+- **Plausible ranges** (checked after conversion, on the value and on its min and max): pH 3–10,
+  ammonia/nitrite 0–10, nitrate 0–200, KH 0–30, GH 0–40, EC 0–2000, TDS 0–1500, temperature
+  50–100 °F, phosphate 0–20, potassium 0–100, iron 0–5. A value outside its range is rejected with
+  an error naming the parameter, value and range. Editing a range in `RANGES` is how to allow
+  something unusual.
+
+Tests: `venv/bin/python -m unittest discover -s tests -v`
 
 ### API used by the MCP server
 

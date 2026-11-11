@@ -50,25 +50,48 @@ EVENT_TYPES = {
 
 QUALITIES = ('ok', 'suspect', 'bad')
 
+# Plausible range per parameter (after unit conversion). Values, mins and maxes outside it are
+# rejected rather than stored, so a typo or a wrong unit gets questioned instead of charted.
+RANGES = {
+    'ph': (3, 10), 'ph_degassed': (3, 10),
+    'ammonia': (0, 10), 'nitrite': (0, 10), 'nitrate': (0, 200),
+    'kh': (0, 30), 'gh': (0, 40),
+    'ec': (0, 2000), 'tds': (0, 1500),
+    'temperature': (50, 100),
+    'phosphate': (0, 20), 'potassium': (0, 100), 'iron': (0, 5),
+}
+
 
 def norm_unit(u):
     """Compare units loosely: 'uS/cm' == 'µS/cm', case and spaces ignored."""
     return (u or '').replace('µ', 'u').replace(' ', '').lower()
 
 
+def canon_unit(u):
+    """norm_unit plus: 'mg/L' -> 'ppm', 'ppm as X' -> 'ppm X', leading degree sign dropped."""
+    u = norm_unit(u).replace('mg/l', 'ppm').lstrip('°')
+    return 'ppm' + u[5:] if u.startswith('ppmas') else u
+
+
 def units_match(unit, expected):
-    """Same unit, allowing common spellings: 'mg/L' or bare 'ppm' for 'ppm NO3', '°dKH' for 'dKH',
-    'F' for '°F', 'percent' for '%'."""
-    u, e = norm_unit(unit).replace('mg/l', 'ppm'), norm_unit(expected)
-    if u == e or u.lstrip('°') == e.lstrip('°'):
-        return True
-    if e.startswith('ppm') and u in ('ppm', e.replace('ppm', 'ppmas')):
+    """Same unit, allowing common spellings. A bare 'ppm'/'mg/L' is taken as the catalog's form
+    (nitrate as NO3, phosphate as PO4...); a different form ('ppm NO3-N', 'ppm P') does not match."""
+    u, e = canon_unit(unit), canon_unit(expected)
+    if u == e or (e.startswith('ppm') and u == 'ppm'):
         return True
     return e == '%' and u == 'percent'
 
-# Imported units that convert to the catalog unit: (parameter, normalized unit) -> divisor.
-# KH/GH in ppm (as CaCO3) -> degrees; 1 dKH = 1 dGH = 17.848 ppm.
+# Units that convert to the catalog unit: parameter -> (divisor, accepted spellings).
+# KH/GH as CaCO3 -> degrees; 1 dKH = 1 dGH = 17.848 ppm CaCO3. Matched via canon_unit, so
+# 'mg/L', 'ppm as CaCO3' and 'mg/L CaCO3' all count.
 UNIT_CONVERSIONS = {
-    ('kh', 'ppm'): 17.848,
-    ('gh', 'ppm'): 17.848,
+    'kh': (17.848, ('ppm', 'mg/L', 'ppm CaCO3', 'mg/L CaCO3')),
+    'gh': (17.848, ('ppm', 'mg/L', 'ppm CaCO3', 'mg/L CaCO3')),
 }
+
+
+def conversion_divisor(key, unit):
+    conv = UNIT_CONVERSIONS.get(key)
+    if conv and canon_unit(unit) in {canon_unit(u) for u in conv[1]}:
+        return conv[0]
+    return None

@@ -13,11 +13,12 @@ recent history. **Insert-only**: there are no edit or delete tools. Fix mistakes
 
 - Tanks are matched by code (`100P`), name or id. Parameters and events are matched by key, label or common
   alias (`NO3`, `conductivity`, `wc`, `co2`). Unknown names are rejected, and the error lists the valid ones.
-- Units: the stored units are pH, ppm (ammonia, nitrite), ppm NO3, dKH, dGH, µS/cm, °F, ppm PO4/K/Fe.
-  Spelling variants are accepted (`uS/cm`, `mg/L`, `ppm` for `ppm NO3`, `percent`). KH and GH given in
-  ppm are converted to degrees, and the original value is kept in the note. Any other mismatch is
-  rejected, for example `mS/cm`. The rules live in the WaterScribe API (`app/records.py`), so the
-  web form, the CSV import and MCP behave the same way.
+- Units and plausible ranges: the stored units are pH, ppm (ammonia, nitrite), ppm NO3, dKH, dGH,
+  µS/cm, °F, ppm PO4/K/Fe. KH/GH given in ppm, mg/L or ppm CaCO3 are converted. A bare ppm for
+  nitrate or phosphate means as NO3/PO4. Other units and out-of-range values are rejected with an
+  error naming the parameter, value and allowed range. The server's instructions tell Claude to ask
+  you, not to adjust the value. The full rules are in the main README (*Units and plausible
+  ranges*). They live in the WaterScribe API, so the web form, the CSV import and MCP all agree.
 - Timestamps are ISO 8601 in tank-local time (America/Los_Angeles), unless an offset is given.
   A date with no time is stored as "time unknown". Omit the timestamp for now. Future times are rejected.
 - Results report what the database stored, after conversion, not what was sent.
@@ -48,13 +49,29 @@ with a 401 and at least 1 s of delay, whether it was a wrong passphrase, a locko
 link. Each failure also uses up that sign-in, so a retry starts again from claude.ai. The real
 reason is written only to the audit log (`oauth.login_failed`, `oauth.lockout`). The client IP is
 the rightmost `X-Forwarded-For` entry added by tailscaled. Lockouts survive restarts in
-`login_limits.json`. To clear one by hand, stop the service, delete that file and start it again.
+`login_limits.json`.
+
+Lockouts gate only the passphrase page. Existing bearer tokens and refresh-token grants are never
+checked against them, so a lockout can't cut off a connected claude.ai (`tests/test_scope.py`).
+
+```bash
+venv/bin/python clear-lockouts             # show lockouts and recent failures
+venv/bin/python clear-lockouts --ip 1.2.3.4
+venv/bin/python clear-lockouts --all       # global included
+```
+This takes effect immediately, with no restart, and is written to the audit log
+(`oauth.lockouts_cleared`).
 
 Tests: `venv/bin/python -m unittest discover -s tests -v`
 
-**Health**: `GET /healthz` is public and unauthenticated. It returns `{"ok": ...}`, and 503 when the
-WaterScribe API doesn't answer. It is checked live, never cached. The robix services page polls it
-through the public URL, so a green dot there means the funnel, this server and the API all answered.
+**Health**: `GET /healthz` is public and unauthenticated, so it says only `{"ok": true}` or
+`{"ok": false}` (503). It means this server and the WaterScribe API both answered, checked live
+and never cached. Per-component status is on robix nginx, for LAN and tailnet addresses only (403
+otherwise): `/status/waterscribe-mcp/server` and `/status/waterscribe-mcp/api`. The services page
+tile checks those two, plus the public `/healthz` through the funnel, and shows which one failed.
+
+**Sandboxing**: the unit runs with `ProtectSystem=strict` and `ProtectHome=read-only`. The only
+writable path is `~/.local/state/waterscribe-mcp`.
 
 **Audit log**: `~/.local/state/waterscribe-mcp/audit.jsonl` gets one JSON line per tool call
 (client, inputs, result or error, duration), plus OAuth events such as registrations, logins,
