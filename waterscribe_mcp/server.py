@@ -97,13 +97,19 @@ def _norm(s):
 
 
 async def resolve_tank(tank):
+    """Match by code, name or id. A tank without a code is refused, not written to: codes are
+    how tanks are named here, and WaterScribe now requires one, so a code-less tank is an error."""
     tanks = await api('GET', '/aquariums')
+    coded = [t for t in tanks if t.get('code')]
     want = _norm(str(tank))
     for t in tanks:
-        if want in (_norm(t['code']), _norm(t['name']), str(t['id'])):
+        if want and want in (_norm(t.get('code')), _norm(t['name']), str(t['id'])):
+            if not t.get('code'):
+                raise ToolError(f"tank {t['name']!r} has no code, so it can't be used here. Ask the user to "
+                                f"give it one on WaterScribe's Manage Aquariums page.")
             return t
     raise ToolError(f'unknown tank {tank!r}. Known tanks: ' +
-                    '; '.join(f"{t['code']} ({t['name']})" for t in tanks) + '. Use the code.')
+                    '; '.join(f"{t['code']} ({t['name']})" for t in coded) + '. Use the code.')
 
 
 PARAM_ALIASES = {'nh3': 'ammonia', 'nh4': 'ammonia', 'tan': 'ammonia', 'no2': 'nitrite', 'no3': 'nitrate',
@@ -181,10 +187,17 @@ mcp = MCPServer(
 
 @mcp.tool(annotations=READ)
 @audited
-async def list_tanks() -> list[dict]:
-    """List the aquariums: code (use this to name a tank), name, type and volume."""
-    return [{k: t[k] for k in ('code', 'name', 'type', 'volume_gallons', 'description') if t.get(k) is not None}
-            for t in await api('GET', '/aquariums')]
+async def list_tanks() -> dict:
+    """List the aquariums: code (use this to name a tank), name, type and volume. Tanks without
+    a code can't be used and are named under 'without_code' so the user can fix them."""
+    tanks = await api('GET', '/aquariums')
+    out = {'tanks': [{k: t[k] for k in ('code', 'name', 'type', 'volume_gallons', 'description') if t.get(k) is not None}
+                     for t in tanks if t.get('code')]}
+    missing = [t['name'] for t in tanks if not t.get('code')]
+    if missing:
+        out['without_code'] = missing
+        out['warning'] = 'These tanks have no code and cannot be used until one is set on Manage Aquariums.'
+    return out
 
 
 @mcp.tool(annotations=READ)

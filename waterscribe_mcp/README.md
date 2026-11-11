@@ -5,13 +5,13 @@ recent history. **Insert-only**: there are no edit or delete tools. Fix mistakes
 
 | Tool | What it does |
 |---|---|
-| `list_tanks()` | Codes, names, types, volumes |
+| `list_tanks()` | Codes, names, types, volumes. A tank without a code is left out and named under `without_code` |
 | `list_parameters()` | Parameters with stored units, event types, qualities |
 | `log_readings(tank, readings[])` | One or more readings, all saved or none. Each reading: `parameter`, `value`, optional `value_min`/`value_max`, `unit`, `method`, `quality`, `notes`, `timestamp` |
 | `log_event(tank, event, value?, unit?, notes?, timestamp?)` | Water change, CO2 bubble rate, dosing, maintenance... |
 | `get_recent(tank, parameter?, days=14)` | Readings newest first. With no parameter, events are included too |
 
-- Tanks are matched by code (`100P`), name or id. Parameters and events are matched by key, label or common
+- Tanks are matched by code (`100P`), name or id. A tank with no code is refused, with a message to set one, and nothing is written. Parameters and events are matched by key, label or common
   alias (`NO3`, `conductivity`, `wc`, `co2`). Unknown names are rejected, and the error lists the valid ones.
 - Units and plausible ranges: the stored units are pH, ppm (ammonia, nitrite), ppm NO3, dKH, dGH,
   µS/cm, °F, ppm PO4/K/Fe. KH/GH given in ppm, mg/L or ppm CaCO3 are converted. A bare ppm for

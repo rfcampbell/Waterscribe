@@ -13,7 +13,7 @@ Track water parameters, schedule maintenance, manage fish inventory, and monitor
 - **Scheduled Tasks** — Recurring and one-time maintenance reminders
 - **Fish Inventory** — Track species with held/planned counts, auto-fetched Wikipedia thumbnails and species info
 - **Events** — Water changes (%), CO2 bubble rate (bubbles/30s), fertilizer dose (ml/day), one-off doses, ammonia doses (ppm), livestock added, filter seeding, cycle complete, drop checker refills, equipment changes and routine maintenance; completed scheduled tasks are logged here too
-- **Multi-Aquarium** — Track multiple tanks; the Manage Aquariums page (`/aquariums`) lists every tank with edit and delete
+- **Multi-Aquarium** — Track multiple tanks; the Manage Aquariums page (`/aquariums`) lists every tank with edit and delete. Every tank has a short unique code (`100P`, `HQT`), which is required (the database enforces it); CSV import and the MCP server name tanks by it. **+ Add Aquarium** on the dashboard opens that page's form
 - **CSV Export / Import** — Readings and events export as CSV from the Charts tab; `import_csv.py` reads the same format (see below)
 - **PWA** — Install as a standalone app on iOS/Android from the browser
 - **Claude connector** — `waterscribe_mcp/` is an insert-only MCP server, so Claude can log readings and events and read recent history (see [waterscribe_mcp/README.md](waterscribe_mcp/README.md))
@@ -149,6 +149,10 @@ Add `SLACK_BOT_TOKEN` and `SLACK_NOTIFY_USER` to your `.env` to enable:
 | `SLACK_NOTIFY_USER` | No | Slack user ID for DM notifications |
 
 ## Future work
+
+- **Dead route:** `GET /aquarium/<id>` (`aquarium_detail`) renders `dashboard/aquarium.html`, which
+  doesn't exist, so gunicorn drops the connection. Nothing links to it; the dashboard uses
+  `/?aquarium_id=`. Delete the route, or make it redirect.
 
 - **Per-tank plausible ranges.** `RANGES` in `app/catalog.py` is global. A medaka pond added as a
   tank would need its own temperature range, since it drops well below 50 °F in winter. That means

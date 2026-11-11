@@ -77,10 +77,11 @@ def aquarium_detail(aquarium_id):
 CODE_RE = re.compile(r'^[A-Z0-9_-]{1,10}$')
 
 def parse_code(raw, aquarium_id=None):
-    """'100p ' -> '100P'; '' -> None. Raises ValueError if malformed or taken by another tank."""
-    code = (raw or '').strip().upper() or None
-    if code is None:
-        return None
+    """'100p ' -> '100P'. Required: every tank needs a code (CSV import and the MCP server name
+    tanks by it). Raises ValueError if blank, malformed or taken by another tank."""
+    code = (raw or '').strip().upper()
+    if not code:
+        raise ValueError('Code is required (1-10 letters, digits, - or _, e.g. 100P)')
     if not CODE_RE.match(code):
         raise ValueError('Code must be 1-10 letters, digits, - or _ (e.g. 100P)')
     taken = Aquarium.query.filter(Aquarium.code == code, Aquarium.id != aquarium_id).first()
@@ -176,7 +177,7 @@ def edit_aquarium(aquarium_id):
             flash('Name is required.', 'danger')
             return redirect(url_for('dashboard.manage_aquariums'))
         aquarium.name = name
-    if 'code' in data:
+    if 'code' in data:     # absent = unchanged; present but blank is rejected
         try:
             aquarium.code = parse_code(data.get('code'), aquarium.id)
         except ValueError as e:

@@ -747,29 +747,9 @@
     }
 
 
-    // Create aquarium
+    // Create aquarium: one form for it, on Manage Aquariums, which asks for the tank code
     function showCreateAquarium() {
-        const name = prompt('Enter aquarium name:');
-        if (!name) return;
-        const volume = prompt('Volume in gallons (optional):');
-        
-        const data = { name };
-        if (volume) data.volume_gallons = volume;
-        
-        fetch('{{ url_for("dashboard.create_aquarium") }}', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        })
-        .then(r => r.json())
-        .then(result => {
-            if (result.success) {
-                window.location.href = `{{ url_for('dashboard.index') }}?aquarium_id=${result.id}`;
-            } else {
-                alert('Failed to create aquarium: ' + (result.error || 'Unknown error'));
-            }
-        })
-        .catch(() => alert('Failed to create aquarium'));
+        window.location.href = '{{ url_for("dashboard.manage_aquariums") }}#add';
     }
 
     // ---- Readings & events ----

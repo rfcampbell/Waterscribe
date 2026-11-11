@@ -149,7 +149,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label" for="code-{{ a.id }}">Code</label>
-                <input class="form-control" id="code-{{ a.id }}" name="code" value="{{ a.code or '' }}" maxlength="10" placeholder="e.g. 100P" style="text-transform: uppercase;">
+                <input class="form-control" id="code-{{ a.id }}" name="code" value="{{ a.code or '' }}" maxlength="10" placeholder="e.g. 100P" required pattern="[A-Za-z0-9_\-]{1,10}" title="1-10 letters, digits, - or _" style="text-transform: uppercase;">
             </div>
             <div class="form-group">
                 <label class="form-label" for="type-{{ a.id }}">Type</label>
@@ -176,7 +176,7 @@
 {% endfor %}
 
 <div class="panel">
-    <h2 style="font-size: 1.2rem; font-weight: 600; margin-bottom: 15px;">Add Aquarium</h2>
+    <h2 id="add" style="font-size: 1.2rem; font-weight: 600; margin-bottom: 15px;">Add Aquarium</h2>
     <form method="post" action="{{ url_for('dashboard.create_aquarium') }}">
         <div class="form-grid">
             <div class="form-group">
@@ -185,7 +185,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label" for="code-new">Code</label>
-                <input class="form-control" id="code-new" name="code" maxlength="10" placeholder="e.g. 100P" style="text-transform: uppercase;">
+                <input class="form-control" id="code-new" name="code" maxlength="10" placeholder="e.g. 100P" required pattern="[A-Za-z0-9_\-]{1,10}" title="1-10 letters, digits, - or _" style="text-transform: uppercase;">
             </div>
             <div class="form-group">
                 <label class="form-label" for="type-new">Type</label>
