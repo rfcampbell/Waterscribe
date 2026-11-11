@@ -307,17 +307,9 @@
     <div class="bubble"></div>
 
     <div class="container">
-        {% if current_user.is_authenticated %}
         <header>
             <a href="{{ url_for('dashboard.index') }}" class="logo">WaterScribe</a>
-            <div class="user-nav">
-                <div class="user-info">
-                    Welcome, {{ current_user.display_name }}!
-                </div>
-                <a href="{{ url_for('auth.logout') }}" class="btn btn-secondary">Logout</a>
-            </div>
         </header>
-        {% endif %}
 
         <!-- Flash messages -->
         {% with messages = get_flashed_messages(with_categories=true) %}

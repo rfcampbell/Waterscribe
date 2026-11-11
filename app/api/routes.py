@@ -1,10 +1,8 @@
 """
 API routes - JSON API for charts and CRUD operations
-All operations are scoped to the current user's aquariums
 """
 import json
 from flask import jsonify, request
-from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 
 from app.api import bp
@@ -13,9 +11,8 @@ from app.notifications import notify_task_created
 from app.fish_images import fetch_fish_image, fetch_species_info
 from app.utils import parse_number
 
-def get_user_aquarium(aquarium_id):
-    """Helper to get aquarium that belongs to current user"""
-    return Aquarium.query.filter_by(id=aquarium_id, user_id=current_user.id).first()
+def get_aquarium(aquarium_id):
+    return db.session.get(Aquarium, aquarium_id)
 
 PARAM_FIELDS = ('temperature', 'ph', 'ammonia', 'nitrite', 'nitrate', 'ec', 'kh', 'gh')
 
@@ -25,10 +22,9 @@ def parse_params(data):
 
 # Water Parameters API
 @bp.route('/aquarium/<int:aquarium_id>/parameters', methods=['GET', 'POST', 'PUT', 'DELETE'])
-@login_required
 def parameters(aquarium_id):
     """Handle water parameter data for a specific aquarium"""
-    aquarium = get_user_aquarium(aquarium_id)
+    aquarium = get_aquarium(aquarium_id)
     if not aquarium:
         return jsonify({'success': False, 'error': 'Aquarium not found'}), 404
     
@@ -98,10 +94,9 @@ def parameters(aquarium_id):
 
 # Maintenance Log API
 @bp.route('/aquarium/<int:aquarium_id>/maintenance', methods=['GET', 'POST', 'DELETE'])
-@login_required
 def maintenance(aquarium_id):
     """Handle maintenance log entries for a specific aquarium"""
-    aquarium = get_user_aquarium(aquarium_id)
+    aquarium = get_aquarium(aquarium_id)
     if not aquarium:
         return jsonify({'success': False, 'error': 'Aquarium not found'}), 404
     
@@ -150,10 +145,9 @@ def maintenance(aquarium_id):
 
 # Scheduled Tasks API
 @bp.route('/aquarium/<int:aquarium_id>/scheduled', methods=['GET', 'POST', 'PUT', 'DELETE'])
-@login_required
 def scheduled_tasks(aquarium_id):
     """Handle scheduled tasks for a specific aquarium"""
-    aquarium = get_user_aquarium(aquarium_id)
+    aquarium = get_aquarium(aquarium_id)
     if not aquarium:
         return jsonify({'success': False, 'error': 'Aquarium not found'}), 404
     
@@ -277,10 +271,9 @@ def scheduled_tasks(aquarium_id):
 
 # Fish Inventory API
 @bp.route('/aquarium/<int:aquarium_id>/fish', methods=['GET', 'POST', 'PUT', 'DELETE'])
-@login_required
 def fish_inventory(aquarium_id):
     """Handle fish inventory for a specific aquarium"""
-    aquarium = get_user_aquarium(aquarium_id)
+    aquarium = get_aquarium(aquarium_id)
     if not aquarium:
         return jsonify({'success': False, 'error': 'Aquarium not found'}), 404
     
@@ -383,10 +376,9 @@ def fish_inventory(aquarium_id):
 
 # Charts API
 @bp.route('/aquarium/<int:aquarium_id>/parameters/chart')
-@login_required
 def parameters_chart(aquarium_id):
     """Get parameter data formatted for charts"""
-    aquarium = get_user_aquarium(aquarium_id)
+    aquarium = get_aquarium(aquarium_id)
     if not aquarium:
         return jsonify({'success': False, 'error': 'Aquarium not found'}), 404
     
@@ -474,10 +466,9 @@ def parameters_chart(aquarium_id):
 
 # Stats API
 @bp.route('/aquarium/<int:aquarium_id>/stats')
-@login_required
 def aquarium_stats(aquarium_id):
     """Get summary statistics for an aquarium"""
-    aquarium = get_user_aquarium(aquarium_id)
+    aquarium = get_aquarium(aquarium_id)
     if not aquarium:
         return jsonify({'success': False, 'error': 'Aquarium not found'}), 404
     
@@ -494,7 +485,7 @@ def aquarium_stats(aquarium_id):
     ).count()
     
     # Total fish
-    total_fish = db.session.query(db.func.sum(FishInventory.quantity)).filter_by(
+    total_fish = db.session.query(db.func.sum(FishInventory.held)).filter_by(
         aquarium_id=aquarium_id
     ).scalar() or 0
     

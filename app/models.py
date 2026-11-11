@@ -1,45 +1,17 @@
 """
 Database models for WaterScribe
-All models are user-scoped for multi-user support
+Single-user: no accounts, everything is shared
 """
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import UserMixin
-from flask_bcrypt import Bcrypt
 from datetime import datetime
 
 db = SQLAlchemy()
-bcrypt = Bcrypt()
-
-class User(UserMixin, db.Model):
-    """User model for authentication"""
-    __tablename__ = 'users'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(128), nullable=False)
-    display_name = db.Column(db.String(100), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    
-    # Relationships
-    aquariums = db.relationship('Aquarium', backref='owner', lazy=True, cascade='all, delete-orphan')
-    
-    def set_password(self, password):
-        """Hash and set user password"""
-        self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
-    
-    def check_password(self, password):
-        """Check if provided password matches hash"""
-        return bcrypt.check_password_hash(self.password_hash, password)
-    
-    def __repr__(self):
-        return f'<User {self.email}>'
 
 class Aquarium(db.Model):
-    """Aquarium model - users can have multiple tanks"""
+    """Aquarium model"""
     __tablename__ = 'aquariums'
     
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
     type = db.Column(db.String(50))  # freshwater, saltwater, reef, etc.
     volume_gallons = db.Column(db.Float)
@@ -53,7 +25,7 @@ class Aquarium(db.Model):
     fish_inventory = db.relationship('FishInventory', backref='aquarium', lazy=True, cascade='all, delete-orphan')
     
     def __repr__(self):
-        return f'<Aquarium {self.name} (User: {self.user_id})>'
+        return f'<Aquarium {self.name}>'
 
 class WaterParameter(db.Model):
     """Water parameter readings"""

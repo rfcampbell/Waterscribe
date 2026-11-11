@@ -2,17 +2,12 @@
 Flask application factory for WaterScribe
 """
 from flask import Flask
-from flask_login import LoginManager
 from flask_migrate import Migrate
-from flask_bcrypt import Bcrypt
 
-from app.models import db, User
+from app.models import db
 from app.config import config
 
-# Initialize extensions
-login_manager = LoginManager()
 migrate = Migrate()
-bcrypt = Bcrypt()
 
 def create_app(config_name='default'):
     """Application factory pattern"""
@@ -21,23 +16,9 @@ def create_app(config_name='default'):
     
     # Initialize extensions with app
     db.init_app(app)
-    login_manager.init_app(app)
     migrate.init_app(app, db)
-    bcrypt.init_app(app)
-    
-    # Configure Flask-Login
-    login_manager.login_view = 'auth.login'
-    login_manager.login_message = 'Please log in to access this page.'
-    login_manager.login_message_category = 'info'
-    
-    @login_manager.user_loader
-    def load_user(user_id):
-        return User.query.get(int(user_id))
     
     # Register blueprints
-    from app.auth import bp as auth_bp
-    app.register_blueprint(auth_bp, url_prefix='/auth')
-    
     from app.dashboard import bp as dashboard_bp
     app.register_blueprint(dashboard_bp)
     

@@ -13,7 +13,7 @@ Track water parameters, schedule maintenance, manage fish inventory, and monitor
 - **Scheduled Tasks** — Recurring and one-time maintenance reminders
 - **Fish Inventory** — Track species with held/planned counts, auto-fetched Wikipedia thumbnails and species info
 - **Maintenance Log** — Record water changes, filter cleanings, equipment checks
-- **Multi-Aquarium** — Manage multiple tanks from one account; the Manage Aquariums page (`/aquariums`) lists every tank with edit and delete
+- **Multi-Aquarium** — Track multiple tanks; the Manage Aquariums page (`/aquariums`) lists every tank with edit and delete
 - **CSV Export** — Export parameter data for external analysis
 - **PWA** — Install as a standalone app on iOS/Android from the browser
 - **Slack Notifications** — Optional DMs for due/overdue tasks and new task alerts
@@ -26,7 +26,6 @@ The UI features a dark ocean theme with animated bubbles, gradient accents, and 
 
 - **Backend:** Python 3 / Flask / SQLAlchemy / PostgreSQL
 - **Frontend:** Vanilla HTML/CSS/JS / Chart.js
-- **Auth:** Flask-Login + bcrypt
 - **Deployment:** Gunicorn + Nginx + systemd
 - **PWA:** Service worker + Web App Manifest
 

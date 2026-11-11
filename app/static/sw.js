@@ -1,5 +1,5 @@
-const CACHE_NAME = 'waterscribe-v1';
-const PRECACHE = ['/auth/login'];
+const CACHE_NAME = 'waterscribe-v2';
+const PRECACHE = ['/'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(PRECACHE)));

@@ -3,17 +3,15 @@ Dashboard routes - main UI and aquarium management
 """
 from app.utils import parse_number
 from flask import render_template, redirect, url_for, flash, request, jsonify
-from flask_login import login_required, current_user
 
 from app.dashboard import bp
 from app.models import db, Aquarium, WaterParameter, MaintenanceLog, ScheduledTask, FishInventory
 
 @bp.route('/')
-@login_required
 def index():
     """Main dashboard - shows aquarium selector and dashboard"""
     # Get user's aquariums
-    aquariums = Aquarium.query.filter_by(user_id=current_user.id).order_by(Aquarium.name).all()
+    aquariums = Aquarium.query.order_by(Aquarium.name).all()
     
     # If no aquariums, send them to the manage page to add one
     if not aquariums:
@@ -23,7 +21,7 @@ def index():
     # Get the selected aquarium (default to first one)
     selected_id = request.args.get('aquarium_id', type=int)
     if selected_id:
-        selected_aquarium = Aquarium.query.filter_by(id=selected_id, user_id=current_user.id).first()
+        selected_aquarium = db.session.get(Aquarium, selected_id)
         if not selected_aquarium:
             selected_aquarium = aquariums[0]
     else:
@@ -60,15 +58,13 @@ def index():
                          fish_planned=fish_planned)
 
 @bp.route('/aquarium/<int:aquarium_id>')
-@login_required
 def aquarium_detail(aquarium_id):
     """Single aquarium view with all tabs"""
-    aquarium = Aquarium.query.filter_by(id=aquarium_id, user_id=current_user.id).first_or_404()
+    aquarium = db.get_or_404(Aquarium, aquarium_id)
     
     return render_template('dashboard/aquarium.html', aquarium=aquarium)
 
 @bp.route('/create-aquarium', methods=['GET', 'POST'])
-@login_required
 def create_aquarium():
     """Create a new aquarium"""
     if request.method == 'POST':
@@ -89,7 +85,6 @@ def create_aquarium():
             return redirect(url_for('dashboard.manage_aquariums'))
         
         aquarium = Aquarium(
-            user_id=current_user.id,
             name=name,
             type=(data.get('type') or '').strip() or None,
             volume_gallons=volume,
@@ -116,10 +111,9 @@ def create_aquarium():
     return redirect(url_for('dashboard.manage_aquariums'))
 
 @bp.route('/aquariums')
-@login_required
 def manage_aquariums():
     """List all aquariums with edit/delete"""
-    aquariums = Aquarium.query.filter_by(user_id=current_user.id).order_by(Aquarium.name).all()
+    aquariums = Aquarium.query.order_by(Aquarium.name).all()
     counts = {}
     for a in aquariums:
         counts[a.id] = {
@@ -132,10 +126,9 @@ def manage_aquariums():
                            aquariums=aquariums, counts=counts)
 
 @bp.route('/aquarium/<int:aquarium_id>/edit', methods=['POST'])
-@login_required
 def edit_aquarium(aquarium_id):
     """Edit an existing aquarium"""
-    aquarium = Aquarium.query.filter_by(id=aquarium_id, user_id=current_user.id).first_or_404()
+    aquarium = db.get_or_404(Aquarium, aquarium_id)
     
     data = request.get_json() if request.is_json else request.form
     
@@ -178,10 +171,9 @@ def edit_aquarium(aquarium_id):
             return redirect(url_for('dashboard.manage_aquariums'))
 
 @bp.route('/aquarium/<int:aquarium_id>/delete', methods=['POST'])
-@login_required
 def delete_aquarium(aquarium_id):
     """Delete an aquarium and all its data"""
-    aquarium = Aquarium.query.filter_by(id=aquarium_id, user_id=current_user.id).first_or_404()
+    aquarium = db.get_or_404(Aquarium, aquarium_id)
     
     try:
         db.session.delete(aquarium)
