@@ -10,6 +10,8 @@ import json
 import os
 import secrets
 import time
+
+import anyio
 from html import escape
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -21,6 +23,8 @@ from mcp.server.auth.provider import (AccessToken, AuthorizationCode, Authorizat
                                       RefreshToken, RegistrationError, TokenError, construct_redirect_uri)
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 
+from limits import LoginLimiter, client_ip
+
 SCOPE = 'waterscribe'
 SUBJECT = 'rob'
 ACCESS_TTL = 24 * 3600
@@ -30,8 +34,9 @@ PENDING_TTL = 600
 MAX_CLIENTS = 50
 # Redirect URIs a client may register: claude.ai's callback, plus loopback for local testing.
 ALLOWED_REDIRECTS = {'https://claude.ai/api/mcp/auth_callback', 'https://claude.com/api/mcp/auth_callback'}
-LOGIN_FAIL_LIMIT = 10          # failed passphrases per LOGIN_FAIL_WINDOW before /login locks
-LOGIN_FAIL_WINDOW = 3600
+MAX_PENDING = 100              # outstanding /authorize requests kept in memory
+FAIL_SECONDS = 1.0             # every failed /login takes at least this long, whatever the cause
+FAILED = 'Sign-in failed. Start again from claude.ai.'   # the one message for every failure
 
 
 def HTMLResponse(body, status=200):
@@ -66,13 +71,15 @@ def redirect_allowed(uri):
 
 
 class Provider:
-    def __init__(self, state_dir, resource_url, audit):
+    def __init__(self, state_dir, resource_url, audit, clock=time.time):
         self.path = Path(state_dir) / 'oauth.json'
         self.passphrase_path = Path(state_dir) / 'passphrase'
         self.resource = resource_url
         self.audit = audit
+        self.clock = clock
+        self.fail_seconds = FAIL_SECONDS
         self.pending = {}          # login request id -> (client_id, params, expires) ; memory only
-        self.fails = []            # timestamps of failed logins
+        self.limiter = LoginLimiter(Path(state_dir) / 'login_limits.json', clock)
         self.s = json.loads(self.path.read_text()) if self.path.exists() else {}
         for k in ('clients', 'codes', 'access', 'refresh'):
             self.s.setdefault(k, {})
@@ -110,37 +117,57 @@ class Provider:
     async def authorize(self, client, params: AuthorizationParams):
         if not self.passphrase_path.exists():
             raise AuthorizeError('server_error', 'no passphrase set on the server (run set-passphrase)')
-        now = time.time()
+        now = self.clock()
         self.pending = {k: v for k, v in self.pending.items() if v[2] > now}
+        while len(self.pending) >= MAX_PENDING:
+            del self.pending[min(self.pending, key=lambda k: self.pending[k][2])]
         req = secrets.token_urlsafe(24)
         self.pending[req] = (client.client_id, params, now + PENDING_TTL)
         return f'{self.resource.rsplit("/mcp", 1)[0]}/login?req={req}'
 
     async def login(self, request: Request):
-        req = request.query_params.get('req', '')
-        if request.method == 'POST':
-            form = parse_qs((await request.body()).decode(errors='replace'))
-            req = (form.get('req') or [''])[0]
-        entry = self.pending.get(req)
-        if not entry or entry[2] < time.time():
-            return HTMLResponse(_page('This sign-in link has expired. Start again from claude.ai.'), 400)
-        client_id, params, _ = entry
-        client = self.s['clients'].get(client_id, {})
+        """GET shows the passphrase form; POST checks it. Every failure (unknown or expired request,
+        lockout, wrong passphrase) gets the identical response after the same minimum delay, and
+        uses up the sign-in request; the reason goes only to the audit log."""
+        started, ip = time.monotonic(), client_ip(request)
         if request.method == 'GET':
-            return HTMLResponse(_page(None, req, client.get('client_name') or client_id))
+            req = request.query_params.get('req', '')
+            entry = self.pending.get(req)
+            if not entry or entry[2] < self.clock():
+                return HTMLResponse(_page(FAILED), 401)
+            client = self.s['clients'].get(entry[0], {})
+            return HTMLResponse(_page(None, req, client.get('client_name') or entry[0]))
 
-        now = time.time()
-        self.fails = [t for t in self.fails if t > now - LOGIN_FAIL_WINDOW]
-        if len(self.fails) >= LOGIN_FAIL_LIMIT:
-            self.audit('oauth.login_locked', {'client_id': client_id})
-            return HTMLResponse(_page('Too many wrong passphrases. Try again in an hour.'), 429)
-        passphrase = (form.get('passphrase') or [''])[0]
-        if not check_passphrase(passphrase, self.passphrase_path.read_text().strip()):
-            self.fails.append(now)
-            self.audit('oauth.login_failed', {'client_id': client_id, 'ip': request.headers.get('x-forwarded-for')})
-            return HTMLResponse(_page('Wrong passphrase.', req, client.get('client_name') or client_id), 401)
+        body = await request.body()
+        form = parse_qs(body[:4096].decode(errors='replace'))
+        req, passphrase = (form.get('req') or [''])[0], (form.get('passphrase') or [''])[0]
+        entry = self.pending.pop(req, None)          # one attempt per sign-in request
+        client_id = entry[0] if entry else None
+        lock = self.limiter.locked(ip)
+        if lock:
+            reason = f'locked_{lock}'                # passphrase not even checked
+        elif not entry or entry[2] < self.clock():
+            reason = 'bad_request'
+        elif not self.passphrase_path.exists():
+            reason = 'no_passphrase_set'
+        else:
+            stored = self.passphrase_path.read_text().strip()
+            ok = await anyio.to_thread.run_sync(check_passphrase, passphrase, stored)
+            reason = None if ok else 'wrong_passphrase'
 
-        del self.pending[req]
+        if reason:
+            new_locks = [] if lock else self.limiter.fail(ip)
+            self.audit('oauth.login_failed', {'ip': ip, 'reason': reason, 'client_id': client_id,
+                                              **self.limiter.counts(ip)})
+            for scope, secs, level in new_locks:
+                self.audit('oauth.lockout', {'scope': scope, 'ip': ip if scope == 'ip' else None,
+                                             'seconds': secs, 'level': level})
+            await anyio.sleep(max(0.0, started + self.fail_seconds - time.monotonic()))
+            return HTMLResponse(_page(FAILED), 401)
+
+        self.limiter.success(ip)
+        client_id, params, _ = entry
+        now = self.clock()
         code = secrets.token_urlsafe(32)
         self.s['codes'][_h(code)] = AuthorizationCode(
             code=_h(code), scopes=params.scopes or [SCOPE], expires_at=now + CODE_TTL, client_id=client_id,
@@ -148,7 +175,7 @@ class Provider:
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
             resource=self.resource, subject=SUBJECT).model_dump(mode='json')
         self._save()
-        self.audit('oauth.login', {'client_id': client_id})
+        self.audit('oauth.login', {'client_id': client_id, 'ip': ip})
         return RedirectResponse(construct_redirect_uri(str(params.redirect_uri), code=code, state=params.state), 302)
 
     # codes and tokens

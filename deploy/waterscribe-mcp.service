@@ -3,6 +3,10 @@ Description=WaterScribe MCP server (claude.ai connector; exposed only via Tailsc
 After=network-online.target waterscribe.service
 Wants=network-online.target
 OnFailure=robix-alert@%n.service
+# Restart= alone keeps a crash loop in "activating" forever, and OnFailure only fires on "failed".
+# 5 starts within 5 min (RestartSec=5 makes a loop hit this in ~25 s) -> failed -> robix-alert.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 User=rcampbell

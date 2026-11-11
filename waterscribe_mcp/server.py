@@ -267,8 +267,16 @@ async def login(request):
 
 @mcp.custom_route('/healthz', methods=['GET'])
 async def healthz(request):
+    """Public and unauthenticated: says only whether this server and the WaterScribe API answer.
+    CORS-open so the robix services page can show a real status dot."""
     from starlette.responses import JSONResponse
-    return JSONResponse({'ok': True})
+    try:
+        await api('GET', '/catalog')     # uncached: a cached answer would stay green after the API died
+        api_ok = True
+    except ToolError:
+        api_ok = False
+    return JSONResponse({'ok': api_ok, 'waterscribe_api': api_ok}, status_code=200 if api_ok else 503,
+                        headers={'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store'})
 
 
 if __name__ == '__main__':

@@ -37,8 +37,24 @@ page at `/login`, and 24 h access tokens with 90-day rotating refresh tokens. Re
 only claude.ai's callback (`https://claude.ai/api/mcp/auth_callback` or the claude.com one) and
 loopback addresses, which are used for local testing. Codes and tokens are stored as SHA-256 hashes
 in `~/.local/state/waterscribe-mcp/oauth.json` (mode 600). The passphrase is stored as an scrypt hash.
-After 10 wrong passphrases in an hour, `/login` locks. Disconnecting the connector in claude.ai
-revokes its tokens. To cut off every client at once, stop the service and delete `oauth.json`.
+Disconnecting the connector in claude.ai revokes its tokens. To cut off every client at once,
+stop the service and delete `oauth.json`.
+
+**Passphrase guessing** (`limits.py`): 5 failures from one IP within 15 min lock that IP, and 20
+failures from all IPs within 15 min lock everyone. A lockout lasts 15 min, then 30, 60 and so on,
+up to 24 h. The level resets after a day without a lockout. While a lockout is in force, the
+passphrase is not even checked, so a correct guess fails too. Every failure gets the same page,
+with a 401 and at least 1 s of delay, whether it was a wrong passphrase, a lockout or an expired
+link. Each failure also uses up that sign-in, so a retry starts again from claude.ai. The real
+reason is written only to the audit log (`oauth.login_failed`, `oauth.lockout`). The client IP is
+the rightmost `X-Forwarded-For` entry added by tailscaled. Lockouts survive restarts in
+`login_limits.json`. To clear one by hand, stop the service, delete that file and start it again.
+
+Tests: `venv/bin/python -m unittest discover -s tests -v`
+
+**Health**: `GET /healthz` is public and unauthenticated. It returns `{"ok": ...}`, and 503 when the
+WaterScribe API doesn't answer. It is checked live, never cached. The robix services page polls it
+through the public URL, so a green dot there means the funnel, this server and the API all answered.
 
 **Audit log**: `~/.local/state/waterscribe-mcp/audit.jsonl` gets one JSON line per tool call
 (client, inputs, result or error, duration), plus OAuth events such as registrations, logins,
