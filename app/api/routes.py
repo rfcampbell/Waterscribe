@@ -10,8 +10,9 @@ from app.models import db, Aquarium, Reading, Event, ScheduledTask, FishInventor
 from app.notifications import notify_task_created
 from app.fish_images import fetch_fish_image, fetch_species_info
 from app.utils import parse_number
-from app.catalog import PARAMETERS, EVENT_TYPES, CHART_GROUPS
-from app.records import clean_reading, clean_event, when_from_json, readings_csv, events_csv
+from app.catalog import PARAMETERS, EVENT_TYPES, CHART_GROUPS, QUALITIES, UNIT_CONVERSIONS
+from app.records import (clean_reading, clean_event, when_from_json, readings_csv, events_csv,
+                         apply_reading_unit, check_event_unit)
 
 def get_aquarium(aquarium_id):
     return db.session.get(Aquarium, aquarium_id)
@@ -32,6 +33,23 @@ def _since():
     days = request.args.get('days', 0, type=int)
     return datetime.now() - timedelta(days=days) if days > 0 else None
 
+# Tanks and catalog (read-only; used by the MCP server so it never hard-codes names or units)
+@bp.route('/aquariums')
+def list_aquariums():
+    return jsonify([{'id': a.id, 'code': a.code, 'name': a.name.strip(), 'type': a.type,
+                     'volume_gallons': a.volume_gallons, 'description': a.description}
+                    for a in Aquarium.query.order_by(Aquarium.code, Aquarium.name).all()])
+
+@bp.route('/catalog')
+def catalog():
+    return jsonify({
+        'parameters': [{'key': k, 'label': p[0], 'unit': p[1],
+                        'also_accepts': [u for (pk, u) in UNIT_CONVERSIONS if pk == k]}
+                       for k, p in PARAMETERS.items()],
+        'event_types': [{'key': k, 'label': e[0], 'unit': e[1]} for k, e in EVENT_TYPES.items()],
+        'qualities': list(QUALITIES),
+    })
+
 # Readings API
 @bp.route('/aquarium/<int:aquarium_id>/readings', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def readings(aquarium_id):
@@ -46,13 +64,17 @@ def readings(aquarium_id):
         if not rows:
             return _err('Enter at least one reading')
         try:
-            ts, known = when_from_json(data)
-            cleaned = [clean_reading(r) for r in rows]
+            batch_when = when_from_json(data)
+            # a row may carry its own date/time; otherwise it shares the batch's
+            cleaned = [(when_from_json(r) if r.get('date') else batch_when,
+                        apply_reading_unit(clean_reading(r), r.get('unit'))) for r in rows]
         except ValueError as e:
             return _err(str(e))
-        for c in cleaned:
-            db.session.add(Reading(aquarium_id=aquarium_id, timestamp=ts, time_known=known, **c))
-        return _commit(count=len(cleaned))
+        added = [Reading(aquarium_id=aquarium_id, timestamp=ts, time_known=known, **c) for (ts, known), c in cleaned]
+        db.session.add_all(added)
+        db.session.flush()
+        # echo what was stored (after unit conversion), not what was sent
+        return _commit(count=len(added), readings=[r.to_dict() for r in added])
 
     if request.method == 'PUT':
         reading = Reading.query.filter_by(id=data.get('id'), aquarium_id=aquarium_id).first()
@@ -97,7 +119,7 @@ def events(aquarium_id):
     if request.method in ('POST', 'PUT'):
         try:
             ts, known = when_from_json(data)
-            cleaned = clean_event(data)
+            cleaned = check_event_unit(clean_event(data), data.get('unit'))
         except ValueError as e:
             return _err(str(e))
         if request.method == 'POST':

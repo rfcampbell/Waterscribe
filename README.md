@@ -16,6 +16,7 @@ Track water parameters, schedule maintenance, manage fish inventory, and monitor
 - **Multi-Aquarium** — Track multiple tanks; the Manage Aquariums page (`/aquariums`) lists every tank with edit and delete
 - **CSV Export / Import** — Readings and events export as CSV from the Charts tab; `import_csv.py` reads the same format (see below)
 - **PWA** — Install as a standalone app on iOS/Android from the browser
+- **Claude connector** — `waterscribe_mcp/` is an insert-only MCP server, so Claude can log readings and events and read recent history (see [waterscribe_mcp/README.md](waterscribe_mcp/README.md))
 - **Slack Notifications** — Optional DMs for due/overdue tasks and new task alerts
 
 ## Screenshots
@@ -101,6 +102,10 @@ systemctl list-timers waterscribe-backup.timer          # next/last run
 journalctl -u waterscribe-backup -n 5                   # last result
 pg_restore --clean --if-exists --no-owner -d "$DATABASE_URL" ~/waterscribe-backups/<dump>   # restore
 ```
+
+### API used by the MCP server
+
+`GET /api/aquariums` returns the tanks with their codes. `GET /api/catalog` returns parameters, units and event types. `POST /api/aquarium/<id>/readings` accepts a `unit` on each reading, plus an optional `date`/`time` per reading, and echoes the stored rows. `POST .../events` accepts a `unit`. Units are checked and converted as in the CSV import.
 
 ### Slack Notifications (Optional)
 

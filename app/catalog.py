@@ -55,6 +55,17 @@ def norm_unit(u):
     """Compare units loosely: 'uS/cm' == 'µS/cm', case and spaces ignored."""
     return (u or '').replace('µ', 'u').replace(' ', '').lower()
 
+
+def units_match(unit, expected):
+    """Same unit, allowing common spellings: 'mg/L' or bare 'ppm' for 'ppm NO3', '°dKH' for 'dKH',
+    'F' for '°F', 'percent' for '%'."""
+    u, e = norm_unit(unit).replace('mg/l', 'ppm'), norm_unit(expected)
+    if u == e or u.lstrip('°') == e.lstrip('°'):
+        return True
+    if e.startswith('ppm') and u in ('ppm', e.replace('ppm', 'ppmas')):
+        return True
+    return e == '%' and u == 'percent'
+
 # Imported units that convert to the catalog unit: (parameter, normalized unit) -> divisor.
 # KH/GH in ppm (as CaCO3) -> degrees; 1 dKH = 1 dGH = 17.848 ppm.
 UNIT_CONVERSIONS = {

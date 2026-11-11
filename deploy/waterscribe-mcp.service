@@ -1,0 +1,21 @@
+[Unit]
+Description=WaterScribe MCP server (claude.ai connector; exposed only via Tailscale Funnel)
+After=network-online.target waterscribe.service
+Wants=network-online.target
+OnFailure=robix-alert@%n.service
+
+[Service]
+User=rcampbell
+WorkingDirectory=/home/rcampbell/aquarium-tracker/aquarium-tracker/waterscribe_mcp
+ExecStart=/home/rcampbell/aquarium-tracker/aquarium-tracker/waterscribe_mcp/venv/bin/python server.py
+Environment=WATERSCRIBE_MCP_PUBLIC_URL=https://robix.tailaf4333.ts.net
+Environment=WATERSCRIBE_MCP_PORT=8765
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/rcampbell/.local/state/waterscribe-mcp
+
+[Install]
+WantedBy=multi-user.target

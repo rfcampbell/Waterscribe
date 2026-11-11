@@ -7,7 +7,7 @@ import csv
 import io
 from datetime import datetime, date, time
 
-from app.catalog import PARAMETERS, EVENT_TYPES, QUALITIES, UNIT_CONVERSIONS, norm_unit
+from app.catalog import PARAMETERS, EVENT_TYPES, QUALITIES, UNIT_CONVERSIONS, norm_unit, units_match
 from app.utils import parse_number
 
 READING_COLUMNS = ['date', 'time', 'tank', 'parameter', 'value', 'value_min', 'value_max',
@@ -122,24 +122,44 @@ EVENT_ALIASES = {
 }
 
 
+def apply_reading_unit(cleaned, unit):
+    """Check a supplied unit against the catalog; convert via UNIT_CONVERSIONS when it differs
+    (the original value goes into the note). Blank unit = catalog unit. Mutates and returns cleaned."""
+    key, unit = cleaned['parameter'], (unit or '').strip()
+    expected = PARAMETERS[key][1]
+    if not unit or units_match(unit, expected):
+        return cleaned
+    divisor = UNIT_CONVERSIONS.get((key, norm_unit(unit)))
+    if not divisor:
+        raise ValueError(f'{PARAMETERS[key][0]}: unit {unit!r} not accepted (use {expected!r})')
+    orig = _fmt(cleaned['value']) + (f" ({_fmt(cleaned['value_min'])}–{_fmt(cleaned['value_max'])})"
+                                      if cleaned['value_min'] is not None or cleaned['value_max'] is not None else '')
+    for f in ('value', 'value_min', 'value_max'):
+        if cleaned[f] is not None:
+            cleaned[f] = round(cleaned[f] / divisor, 2)
+    note = f'converted from {orig} {unit}'
+    cleaned['notes'] = f"{cleaned['notes']}; {note}" if cleaned['notes'] else note
+    return cleaned
+
+
+def check_event_unit(cleaned, unit):
+    """Blank unit is fine; otherwise it must match the event type's unit ('percent' == '%')."""
+    key, unit = cleaned['event_type'], (unit or '').strip()
+    expected = EVENT_TYPES[key][1]
+    if unit and expected and not units_match(unit, expected):
+        raise ValueError(f'{EVENT_TYPES[key][0]}: unit {unit!r} not accepted (use {expected!r})')
+    if unit and not expected:
+        raise ValueError(f'{EVENT_TYPES[key][0]} takes no value or unit')
+    if cleaned['value'] is not None and not expected:
+        raise ValueError(f'{EVENT_TYPES[key][0]} takes no value')
+    return cleaned
+
+
 def reading_from_csv_row(row):
-    """CSV dict -> (timestamp, time_known, cleaned reading). The unit must match the catalog or
-    have a conversion in UNIT_CONVERSIONS; converted readings keep the original in their note."""
+    """CSV dict -> (timestamp, time_known, cleaned reading), with the unit checked/converted."""
     ts, known = parse_when(row.get('date'), row.get('time'))
     key = (row.get('parameter') or '').strip().lower()
-    cleaned = clean_reading({**row, 'parameter': key})
-    expected, unit = PARAMETERS[key][1], (row.get('unit') or '').strip()
-    if unit and norm_unit(unit) != norm_unit(expected):
-        divisor = UNIT_CONVERSIONS.get((key, norm_unit(unit)))
-        if not divisor:
-            raise ValueError(f'unit {unit!r} for {key} (expected {expected!r})')
-        orig = _fmt(cleaned['value']) + (f" ({_fmt(cleaned['value_min'])}–{_fmt(cleaned['value_max'])})"
-                                          if cleaned['value_min'] is not None or cleaned['value_max'] is not None else '')
-        for f in ('value', 'value_min', 'value_max'):
-            if cleaned[f] is not None:
-                cleaned[f] = round(cleaned[f] / divisor, 2)
-        note = f'converted from {orig} {unit}'
-        cleaned['notes'] = f"{cleaned['notes']}; {note}" if cleaned['notes'] else note
+    cleaned = apply_reading_unit(clean_reading({**row, 'parameter': key}), row.get('unit'))
     return ts, known, cleaned
 
 
@@ -148,11 +168,6 @@ def event_from_csv_row(row):
     name = (row.get('event') or '').strip().lower()
     key, prefix = EVENT_ALIASES.get(name, (name, None))
     notes = '; '.join(x for x in (prefix, (row.get('notes') or '').strip()) if x) or None
-    cleaned = clean_event({'event_type': key, 'value': row.get('value'), 'notes': notes})
-    expected = EVENT_TYPES[key][1]
-    unit = (row.get('unit') or '').strip()
-    if unit and expected and norm_unit(unit) not in (norm_unit(expected), 'percent' if expected == '%' else None):
-        raise ValueError(f'unit {unit!r} for {key} (expected {expected!r})')
-    if cleaned['value'] is not None and not expected:
-        raise ValueError(f'{key} does not take a value')
+    cleaned = check_event_unit(clean_event({'event_type': key, 'value': row.get('value'), 'notes': notes}),
+                               row.get('unit'))
     return ts, known, cleaned
