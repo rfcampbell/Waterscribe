@@ -308,7 +308,7 @@
         </form>
         <div id="parameters-log" class="log-container">
             {% for param in recent_parameters %}
-                <div class="log-item">
+                <div class="log-item" id="param-{{ param.id }}" data-param='{{ {"temperature": param.temperature, "ph": param.ph, "ammonia": param.ammonia, "nitrite": param.nitrite, "nitrate": param.nitrate, "notes": param.notes} | tojson | forceescape }}'>
                     <div class="log-actions">
                         <button class="btn btn-small btn-secondary" onclick="editParameters({{ param.id }})">Edit</button>
                         <button class="btn btn-small btn-danger" onclick="deleteParameters({{ param.id }})">Delete</button>
@@ -537,6 +537,8 @@
             if (result.success) {
                 event.target.reset();
                 location.reload(); // Simple reload for now
+            } else {
+                alert(result.error || 'Failed to save parameters');
             }
         } catch (error) {
             alert('Failed to save parameters');
@@ -744,6 +746,35 @@
             } catch (error) {
                 alert('Failed to delete');
             }
+        }
+    }
+
+    const PARAM_FIELDS = [['temperature', 'Temp °F', '0.1'], ['ph', 'pH', '0.1'], ['ammonia', 'NH3', '0.01'], ['nitrite', 'NO2', '0.01'], ['nitrate', 'NO3', '0.1']];
+
+    function editParameters(id) {
+        const item = document.getElementById(`param-${id}`);
+        const p = JSON.parse(item.dataset.param);
+        const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        const inputs = PARAM_FIELDS.map(([k, label, step]) =>
+            `<label style="font-size: 0.85rem; margin-right: 8px;">${label}: <input type="number" step="${step}" id="edit-${k}-${id}" value="${esc(p[k])}" style="width: 70px; padding: 4px 8px; background: rgba(240,244,248,0.1); border: 1px solid var(--seafoam); border-radius: 4px; color: var(--pearl);"></label>`
+        ).join('');
+        item.querySelector('.log-content').innerHTML = `
+            ${inputs}
+            <br><br><textarea id="edit-notes-${id}" class="form-control" placeholder="Notes">${esc(p.notes)}</textarea>
+            <br><button class="btn btn-small btn-primary" onclick="updateParameters(${id})">Update</button>
+            <button class="btn btn-small btn-secondary" onclick="location.reload()">Cancel</button>
+        `;
+    }
+
+    async function updateParameters(id) {
+        const data = { id, notes: document.getElementById(`edit-notes-${id}`).value };
+        PARAM_FIELDS.forEach(([k]) => data[k] = document.getElementById(`edit-${k}-${id}`).value);
+        try {
+            const result = await api(`/api/aquarium/${currentAquariumId}/parameters`, 'PUT', data);
+            if (result.success) location.reload();
+            else alert(result.error || 'Failed to update parameters');
+        } catch (error) {
+            alert('Failed to update parameters');
         }
     }
 

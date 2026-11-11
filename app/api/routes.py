@@ -16,8 +16,18 @@ def get_user_aquarium(aquarium_id):
     """Helper to get aquarium that belongs to current user"""
     return Aquarium.query.filter_by(id=aquarium_id, user_id=current_user.id).first()
 
+PARAM_FIELDS = ('temperature', 'ph', 'ammonia', 'nitrite', 'nitrate')
+
+def parse_params(data):
+    """Blank form fields -> None; raises ValueError on non-numeric input."""
+    out = {}
+    for f in PARAM_FIELDS:
+        v = data.get(f)
+        out[f] = None if v is None or str(v).strip() == '' else float(v)
+    return out
+
 # Water Parameters API
-@bp.route('/aquarium/<int:aquarium_id>/parameters', methods=['GET', 'POST', 'DELETE'])
+@bp.route('/aquarium/<int:aquarium_id>/parameters', methods=['GET', 'POST', 'PUT', 'DELETE'])
 @login_required
 def parameters(aquarium_id):
     """Handle water parameter data for a specific aquarium"""
@@ -25,17 +35,35 @@ def parameters(aquarium_id):
     if not aquarium:
         return jsonify({'success': False, 'error': 'Aquarium not found'}), 404
     
-    if request.method == 'POST':
-        data = request.json
+    if request.method in ('POST', 'PUT'):
+        data = request.json or {}
+        try:
+            values = parse_params(data)
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Parameters must be numbers'}), 400
+        if all(v is None for v in values.values()):
+            return jsonify({'success': False, 'error': 'Enter at least one parameter'}), 400
+
+    if request.method == 'PUT':
+        parameter = WaterParameter.query.filter_by(id=data.get('id'), aquarium_id=aquarium_id).first()
+        if not parameter:
+            return jsonify({'success': False, 'error': 'Parameter not found'}), 404
+        for k, v in values.items():
+            setattr(parameter, k, v)
+        parameter.notes = data.get('notes') or None
+        try:
+            db.session.commit()
+            return jsonify({'success': True, 'id': parameter.id})
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+    elif request.method == 'POST':
         parameter = WaterParameter(
             aquarium_id=aquarium_id,
             timestamp=datetime.utcnow(),
-            temperature=data.get('temperature'),
-            ph=data.get('ph'),
-            ammonia=data.get('ammonia'),
-            nitrite=data.get('nitrite'),
-            nitrate=data.get('nitrate'),
-            notes=data.get('notes')
+            notes=data.get('notes') or None,
+            **values
         )
         
         try:
