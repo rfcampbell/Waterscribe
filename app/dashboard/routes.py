@@ -1,6 +1,7 @@
 """
 Dashboard routes - main UI and aquarium management
 """
+import re
 from app.utils import parse_number
 from flask import render_template, redirect, url_for, flash, request, jsonify
 
@@ -73,6 +74,26 @@ def aquarium_detail(aquarium_id):
     
     return render_template('dashboard/aquarium.html', aquarium=aquarium)
 
+CODE_RE = re.compile(r'^[A-Z0-9_-]{1,10}$')
+
+def parse_code(raw, aquarium_id=None):
+    """'100p ' -> '100P'; '' -> None. Raises ValueError if malformed or taken by another tank."""
+    code = (raw or '').strip().upper() or None
+    if code is None:
+        return None
+    if not CODE_RE.match(code):
+        raise ValueError('Code must be 1-10 letters, digits, - or _ (e.g. 100P)')
+    taken = Aquarium.query.filter(Aquarium.code == code, Aquarium.id != aquarium_id).first()
+    if taken:
+        raise ValueError(f'Code {code} is already used by {taken.name}')
+    return code
+
+def _bad(msg, redirect_to='dashboard.manage_aquariums'):
+    if request.is_json:
+        return jsonify({'success': False, 'error': msg}), 400
+    flash(msg, 'danger')
+    return redirect(url_for(redirect_to))
+
 @bp.route('/create-aquarium', methods=['GET', 'POST'])
 def create_aquarium():
     """Create a new aquarium"""
@@ -93,8 +114,14 @@ def create_aquarium():
             flash('Name is required.', 'danger')
             return redirect(url_for('dashboard.manage_aquariums'))
         
+        try:
+            code = parse_code(data.get('code'))
+        except ValueError as e:
+            return _bad(str(e))
+        
         aquarium = Aquarium(
             name=name,
+            code=code,
             type=(data.get('type') or '').strip() or None,
             volume_gallons=volume,
             description=(data.get('description') or '').strip() or None
@@ -149,6 +176,11 @@ def edit_aquarium(aquarium_id):
             flash('Name is required.', 'danger')
             return redirect(url_for('dashboard.manage_aquariums'))
         aquarium.name = name
+    if 'code' in data:
+        try:
+            aquarium.code = parse_code(data.get('code'), aquarium.id)
+        except ValueError as e:
+            return _bad(str(e))
     if 'type' in data:
         aquarium.type = (data.get('type') or '').strip() or None
     if 'volume_gallons' in data:

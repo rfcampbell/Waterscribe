@@ -49,6 +49,11 @@
         margin-top: 4px;
     }
 
+    .tank-code {
+        font-family: 'Space Mono', monospace;
+        color: var(--sand);
+    }
+
     .tank-desc {
         margin-top: 8px;
         opacity: 0.85;
@@ -77,7 +82,7 @@
 
     .form-grid {
         display: grid;
-        grid-template-columns: 2fr 1fr 1fr;
+        grid-template-columns: 2fr 0.8fr 1fr 1fr;
         gap: 0 15px;
     }
 
@@ -121,7 +126,7 @@
         <div>
             <a class="tank-name" href="{{ url_for('dashboard.index', aquarium_id=a.id) }}">{{ a.name }}</a>
             <div class="tank-meta">
-                {{ a.type or 'No type set' }}
+                {% if a.code %}<span class="tank-code">{{ a.code }}</span> &middot; {% endif %}{{ a.type or 'No type set' }}
                 &middot; {% if a.volume_gallons is not none %}{{ '%g' % a.volume_gallons }} gal{% else %}Volume not set{% endif %}
                 &middot; {{ c.readings }} readings, {{ c.events }} events, {{ c.tasks }} tasks, {{ c.fish }} fish entries
             </div>
@@ -141,6 +146,10 @@
             <div class="form-group">
                 <label class="form-label" for="name-{{ a.id }}">Name</label>
                 <input class="form-control" id="name-{{ a.id }}" name="name" value="{{ a.name }}" required maxlength="100">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="code-{{ a.id }}">Code</label>
+                <input class="form-control" id="code-{{ a.id }}" name="code" value="{{ a.code or '' }}" maxlength="10" placeholder="e.g. 100P" style="text-transform: uppercase;">
             </div>
             <div class="form-group">
                 <label class="form-label" for="type-{{ a.id }}">Type</label>
@@ -173,6 +182,10 @@
             <div class="form-group">
                 <label class="form-label" for="name-new">Name</label>
                 <input class="form-control" id="name-new" name="name" required maxlength="100">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="code-new">Code</label>
+                <input class="form-control" id="code-new" name="code" maxlength="10" placeholder="e.g. 100P" style="text-transform: uppercase;">
             </div>
             <div class="form-group">
                 <label class="form-label" for="type-new">Type</label>

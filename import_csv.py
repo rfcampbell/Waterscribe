@@ -5,7 +5,7 @@ Import readings or events from CSV (the format the app exports).
     venv/bin/python import_csv.py FILE.csv [--aquarium NAME] [--dry-run]
 
 The kind (readings/events) is detected from the header. The tank column picks
-the aquarium (case-insensitive name match) unless --aquarium is given. Every
+the aquarium (tank code, then name, case-insensitive) unless --aquarium is given. Every
 row is validated before anything is written; any error aborts the whole file.
 Rows identical to ones already stored are skipped, so re-running is safe.
 """
@@ -22,10 +22,13 @@ from app.records import READING_COLUMNS, EVENT_COLUMNS, reading_from_csv_row, ev
 
 
 def find_aquarium(name):
-    matches = Aquarium.query.filter(db.func.lower(db.func.trim(Aquarium.name)) == name.strip().lower()).all()
+    """Match a tank code (100P) first, then a name, case-insensitively."""
+    key = name.strip().lower()
+    matches = Aquarium.query.filter(db.func.lower(Aquarium.code) == key).all() or \
+        Aquarium.query.filter(db.func.lower(db.func.trim(Aquarium.name)) == key).all()
     if len(matches) != 1:
-        names = ', '.join(a.name.strip() for a in Aquarium.query.order_by(Aquarium.name))
-        sys.exit(f'aquarium {name!r}: {"no match" if not matches else "ambiguous"} (have: {names})')
+        have = ', '.join(f'{a.code or "-"} ({a.name.strip()})' for a in Aquarium.query.order_by(Aquarium.name))
+        sys.exit(f'aquarium {name!r}: {"no match" if not matches else "ambiguous"} (have: {have})')
     return matches[0]
 
 
