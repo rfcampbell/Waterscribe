@@ -19,75 +19,63 @@ class Aquarium(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships
-    water_parameters = db.relationship('WaterParameter', backref='aquarium', lazy=True, cascade='all, delete-orphan')
-    maintenance_logs = db.relationship('MaintenanceLog', backref='aquarium', lazy=True, cascade='all, delete-orphan')
+    readings = db.relationship('Reading', backref='aquarium', lazy=True, cascade='all, delete-orphan')
+    events = db.relationship('Event', backref='aquarium', lazy=True, cascade='all, delete-orphan')
     scheduled_tasks = db.relationship('ScheduledTask', backref='aquarium', lazy=True, cascade='all, delete-orphan')
     fish_inventory = db.relationship('FishInventory', backref='aquarium', lazy=True, cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<Aquarium {self.name}>'
 
-class WaterParameter(db.Model):
-    """Water parameter readings"""
-    __tablename__ = 'water_parameters'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    aquarium_id = db.Column(db.Integer, db.ForeignKey('aquariums.id'), nullable=False, index=True)
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
-    temperature = db.Column(db.Float)
-    ph = db.Column(db.Float)
-    ammonia = db.Column(db.Float)
-    nitrite = db.Column(db.Float)
-    nitrate = db.Column(db.Float)
-    ec = db.Column(db.Float)  # µS/cm
-    kh = db.Column(db.Float)  # dKH
-    gh = db.Column(db.Float)  # dGH
-    notes = db.Column(db.Text)
-    
-    def to_dict(self):
-        """Convert to dictionary for JSON responses"""
-        return {
-            'id': self.id,
-            'aquarium_id': self.aquarium_id,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-            'temperature': self.temperature,
-            'ph': self.ph,
-            'ammonia': self.ammonia,
-            'nitrite': self.nitrite,
-            'nitrate': self.nitrate,
-            'ec': self.ec,
-            'kh': self.kh,
-            'gh': self.gh,
-            'notes': self.notes
-        }
-    
-    def __repr__(self):
-        return f'<WaterParameter {self.id} (Aquarium: {self.aquarium_id})>'
+def _ts(r):
+    return {
+        'timestamp': r.timestamp.isoformat(timespec='minutes') if r.timestamp else None,
+        'time_known': r.time_known,
+    }
 
-class MaintenanceLog(db.Model):
-    """Maintenance activity log"""
-    __tablename__ = 'maintenance_log'
-    
+class Reading(db.Model):
+    """One measurement of one parameter. Timestamps are local wall-clock time."""
+    __tablename__ = 'readings'
+
     id = db.Column(db.Integer, primary_key=True)
     aquarium_id = db.Column(db.Integer, db.ForeignKey('aquariums.id'), nullable=False, index=True)
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
-    task_type = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text)
-    completed = db.Column(db.Boolean, default=True, nullable=False)
-    
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now, index=True)
+    time_known = db.Column(db.Boolean, nullable=False, default=True)  # False: date only (stored at 12:00)
+    parameter = db.Column(db.String(30), nullable=False, index=True)   # key in catalog.PARAMETERS
+    value = db.Column(db.Float, nullable=False)
+    value_min = db.Column(db.Float)
+    value_max = db.Column(db.Float)
+    method = db.Column(db.String(100))
+    quality = db.Column(db.String(10), nullable=False, default='ok')   # ok / suspect / bad
+    notes = db.Column(db.Text)
+
     def to_dict(self):
-        """Convert to dictionary for JSON responses"""
-        return {
-            'id': self.id,
-            'aquarium_id': self.aquarium_id,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-            'task_type': self.task_type,
-            'description': self.description,
-            'completed': self.completed
-        }
-    
+        return {'id': self.id, 'aquarium_id': self.aquarium_id, **_ts(self),
+                'parameter': self.parameter, 'value': self.value,
+                'value_min': self.value_min, 'value_max': self.value_max,
+                'method': self.method, 'quality': self.quality, 'notes': self.notes}
+
     def __repr__(self):
-        return f'<MaintenanceLog {self.id} (Aquarium: {self.aquarium_id})>'
+        return f'<Reading {self.parameter}={self.value} (Aquarium: {self.aquarium_id})>'
+
+class Event(db.Model):
+    """Something done to a tank (water change, CO2 adjustment, dosing...). Local time."""
+    __tablename__ = 'events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    aquarium_id = db.Column(db.Integer, db.ForeignKey('aquariums.id'), nullable=False, index=True)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now, index=True)
+    time_known = db.Column(db.Boolean, nullable=False, default=True)
+    event_type = db.Column(db.String(30), nullable=False, index=True)  # key in catalog.EVENT_TYPES
+    value = db.Column(db.Float)
+    notes = db.Column(db.Text)
+
+    def to_dict(self):
+        return {'id': self.id, 'aquarium_id': self.aquarium_id, **_ts(self),
+                'event_type': self.event_type, 'value': self.value, 'notes': self.notes}
+
+    def __repr__(self):
+        return f'<Event {self.event_type} (Aquarium: {self.aquarium_id})>'
 
 class ScheduledTask(db.Model):
     """Scheduled maintenance tasks"""

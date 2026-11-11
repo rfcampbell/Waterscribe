@@ -5,7 +5,9 @@ from app.utils import parse_number
 from flask import render_template, redirect, url_for, flash, request, jsonify
 
 from app.dashboard import bp
-from app.models import db, Aquarium, WaterParameter, MaintenanceLog, ScheduledTask, FishInventory
+from app.models import db, Aquarium, Reading, Event, ScheduledTask, FishInventory
+from app.catalog import PARAMETERS, EVENT_TYPES, QUALITIES
+from app.api.routes import latest_readings
 
 @bp.route('/')
 def index():
@@ -27,19 +29,21 @@ def index():
     else:
         selected_aquarium = aquariums[0]
     
-    # Get recent data for the selected aquarium
-    recent_parameters = WaterParameter.query.filter_by(
-        aquarium_id=selected_aquarium.id
-    ).order_by(WaterParameter.timestamp.desc()).limit(10).all()
+    latest = latest_readings(selected_aquarium.id)
+    # Methods used before, newest first per parameter -- the entry form suggests and pre-fills them
+    methods = {}
+    for param, method in db.session.query(Reading.parameter, Reading.method).filter(
+            Reading.method.isnot(None)).order_by(Reading.timestamp.desc()):
+        methods.setdefault(param, [])
+        if method not in methods[param]:
+            methods[param].append(method)
+    last_bubble = Event.query.filter_by(aquarium_id=selected_aquarium.id, event_type='co2_bubble_rate'
+                                        ).filter(Event.value.isnot(None)).order_by(Event.timestamp.desc()).first()
     
     upcoming_tasks = ScheduledTask.query.filter_by(
         aquarium_id=selected_aquarium.id,
         active=True
     ).order_by(ScheduledTask.next_due).limit(5).all()
-    
-    recent_maintenance = MaintenanceLog.query.filter_by(
-        aquarium_id=selected_aquarium.id
-    ).order_by(MaintenanceLog.timestamp.desc()).limit(10).all()
     
     fish_held = db.session.query(db.func.sum(FishInventory.held)).filter_by(
         aquarium_id=selected_aquarium.id
@@ -51,9 +55,14 @@ def index():
     return render_template('dashboard/index.html',
                          aquariums=aquariums,
                          selected_aquarium=selected_aquarium,
-                         recent_parameters=recent_parameters,
+                         latest=latest,
+                         latest_json={k: r.to_dict() for k, r in latest.items()},
+                         last_bubble=last_bubble,
+                         methods=methods,
+                         parameters=PARAMETERS,
+                         event_types=EVENT_TYPES,
+                         qualities=QUALITIES,
                          upcoming_tasks=upcoming_tasks,
-                         recent_maintenance=recent_maintenance,
                          fish_held=fish_held,
                          fish_planned=fish_planned)
 
@@ -117,8 +126,8 @@ def manage_aquariums():
     counts = {}
     for a in aquariums:
         counts[a.id] = {
-            'readings': WaterParameter.query.filter_by(aquarium_id=a.id).count(),
-            'maintenance': MaintenanceLog.query.filter_by(aquarium_id=a.id).count(),
+            'readings': Reading.query.filter_by(aquarium_id=a.id).count(),
+            'events': Event.query.filter_by(aquarium_id=a.id).count(),
             'tasks': ScheduledTask.query.filter_by(aquarium_id=a.id).count(),
             'fish': FishInventory.query.filter_by(aquarium_id=a.id).count(),
         }

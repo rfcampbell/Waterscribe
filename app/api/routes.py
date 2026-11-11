@@ -2,146 +2,155 @@
 API routes - JSON API for charts and CRUD operations
 """
 import json
-from flask import jsonify, request
+from flask import jsonify, request, Response
 from datetime import datetime, timedelta
 
 from app.api import bp
-from app.models import db, Aquarium, WaterParameter, MaintenanceLog, ScheduledTask, FishInventory
+from app.models import db, Aquarium, Reading, Event, ScheduledTask, FishInventory
 from app.notifications import notify_task_created
 from app.fish_images import fetch_fish_image, fetch_species_info
 from app.utils import parse_number
+from app.catalog import PARAMETERS, EVENT_TYPES, CHART_GROUPS
+from app.records import clean_reading, clean_event, when_from_json, readings_csv, events_csv
 
 def get_aquarium(aquarium_id):
     return db.session.get(Aquarium, aquarium_id)
 
-PARAM_FIELDS = ('temperature', 'ph', 'ammonia', 'nitrite', 'nitrate', 'ec', 'kh', 'gh')
+def _err(msg, code=400):
+    return jsonify({'success': False, 'error': msg}), code
 
-def parse_params(data):
-    """Blank form fields -> None; raises ValueError on non-numeric input."""
-    return {f: parse_number(data.get(f)) for f in PARAM_FIELDS}
+def _commit(**extra):
+    try:
+        db.session.commit()
+        return jsonify({'success': True, **extra})
+    except Exception as e:
+        db.session.rollback()
+        return _err(str(e))
 
-# Water Parameters API
-@bp.route('/aquarium/<int:aquarium_id>/parameters', methods=['GET', 'POST', 'PUT', 'DELETE'])
-def parameters(aquarium_id):
-    """Handle water parameter data for a specific aquarium"""
-    aquarium = get_aquarium(aquarium_id)
-    if not aquarium:
-        return jsonify({'success': False, 'error': 'Aquarium not found'}), 404
-    
-    if request.method in ('POST', 'PUT'):
-        data = request.json or {}
+def _since():
+    """?days=N limits to the last N days; absent or 0 means everything."""
+    days = request.args.get('days', 0, type=int)
+    return datetime.now() - timedelta(days=days) if days > 0 else None
+
+# Readings API
+@bp.route('/aquarium/<int:aquarium_id>/readings', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def readings(aquarium_id):
+    """GET list; POST {date, time, readings: [...]} adds several taken together;
+    PUT {id, date, time, ...} edits one; DELETE ?id= removes one."""
+    if not get_aquarium(aquarium_id):
+        return _err('Aquarium not found', 404)
+    data = request.get_json(silent=True) or {}
+
+    if request.method == 'POST':
+        rows = [r for r in data.get('readings', []) if str(r.get('value', '')).strip() != '']
+        if not rows:
+            return _err('Enter at least one reading')
         try:
-            values = parse_params(data)
-        except ValueError:
-            return jsonify({'success': False, 'error': 'Parameters must be numbers'}), 400
-        if all(v is None for v in values.values()):
-            return jsonify({'success': False, 'error': 'Enter at least one parameter'}), 400
+            ts, known = when_from_json(data)
+            cleaned = [clean_reading(r) for r in rows]
+        except ValueError as e:
+            return _err(str(e))
+        for c in cleaned:
+            db.session.add(Reading(aquarium_id=aquarium_id, timestamp=ts, time_known=known, **c))
+        return _commit(count=len(cleaned))
 
     if request.method == 'PUT':
-        parameter = WaterParameter.query.filter_by(id=data.get('id'), aquarium_id=aquarium_id).first()
-        if not parameter:
-            return jsonify({'success': False, 'error': 'Parameter not found'}), 404
-        for k, v in values.items():
-            setattr(parameter, k, v)
-        parameter.notes = data.get('notes') or None
+        reading = Reading.query.filter_by(id=data.get('id'), aquarium_id=aquarium_id).first()
+        if not reading:
+            return _err('Reading not found', 404)
         try:
-            db.session.commit()
-            return jsonify({'success': True, 'id': parameter.id})
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({'success': False, 'error': str(e)}), 400
+            ts, known = when_from_json(data)
+            cleaned = clean_reading(data)
+        except ValueError as e:
+            return _err(str(e))
+        reading.timestamp, reading.time_known = ts, known
+        for k, v in cleaned.items():
+            setattr(reading, k, v)
+        return _commit(id=reading.id)
 
-    elif request.method == 'POST':
-        parameter = WaterParameter(
-            aquarium_id=aquarium_id,
-            timestamp=datetime.utcnow(),
-            notes=data.get('notes') or None,
-            **values
-        )
-        
-        try:
-            db.session.add(parameter)
-            db.session.commit()
-            return jsonify({'success': True, 'id': parameter.id})
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({'success': False, 'error': str(e)}), 400
-    
-    elif request.method == 'DELETE':
-        param_id = request.args.get('id', type=int)
-        if not param_id:
-            return jsonify({'success': False, 'error': 'ID required'}), 400
-        
-        parameter = WaterParameter.query.filter_by(id=param_id, aquarium_id=aquarium_id).first()
-        if not parameter:
-            return jsonify({'success': False, 'error': 'Parameter not found'}), 404
-        
-        try:
-            db.session.delete(parameter)
-            db.session.commit()
-            return jsonify({'success': True})
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({'success': False, 'error': str(e)}), 400
-    
-    else:  # GET
-        limit = request.args.get('limit', 50, type=int)
-        parameters = WaterParameter.query.filter_by(
-            aquarium_id=aquarium_id
-        ).order_by(WaterParameter.timestamp.desc()).limit(limit).all()
-        
-        return jsonify([param.to_dict() for param in parameters])
+    if request.method == 'DELETE':
+        reading = Reading.query.filter_by(id=request.args.get('id', type=int), aquarium_id=aquarium_id).first()
+        if not reading:
+            return _err('Reading not found', 404)
+        db.session.delete(reading)
+        return _commit()
 
-# Maintenance Log API
-@bp.route('/aquarium/<int:aquarium_id>/maintenance', methods=['GET', 'POST', 'DELETE'])
-def maintenance(aquarium_id):
-    """Handle maintenance log entries for a specific aquarium"""
+    q = Reading.query.filter_by(aquarium_id=aquarium_id)
+    if request.args.get('parameter'):
+        q = q.filter_by(parameter=request.args['parameter'])
+    since = _since()
+    if since:
+        q = q.filter(Reading.timestamp >= since)
+    q = q.order_by(Reading.timestamp.desc(), Reading.id.desc())
+    limit = request.args.get('limit', type=int)
+    if limit:
+        q = q.limit(limit)
+    return jsonify([r.to_dict() for r in q.all()])
+
+# Events API
+@bp.route('/aquarium/<int:aquarium_id>/events', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def events(aquarium_id):
+    if not get_aquarium(aquarium_id):
+        return _err('Aquarium not found', 404)
+    data = request.get_json(silent=True) or {}
+
+    if request.method in ('POST', 'PUT'):
+        try:
+            ts, known = when_from_json(data)
+            cleaned = clean_event(data)
+        except ValueError as e:
+            return _err(str(e))
+        if request.method == 'POST':
+            event = Event(aquarium_id=aquarium_id)
+            db.session.add(event)
+        else:
+            event = Event.query.filter_by(id=data.get('id'), aquarium_id=aquarium_id).first()
+            if not event:
+                return _err('Event not found', 404)
+        event.timestamp, event.time_known = ts, known
+        for k, v in cleaned.items():
+            setattr(event, k, v)
+        db.session.flush()
+        return _commit(id=event.id)
+
+    if request.method == 'DELETE':
+        event = Event.query.filter_by(id=request.args.get('id', type=int), aquarium_id=aquarium_id).first()
+        if not event:
+            return _err('Event not found', 404)
+        db.session.delete(event)
+        return _commit()
+
+    q = Event.query.filter_by(aquarium_id=aquarium_id)
+    since = _since()
+    if since:
+        q = q.filter(Event.timestamp >= since)
+    q = q.order_by(Event.timestamp.desc(), Event.id.desc())
+    limit = request.args.get('limit', type=int)
+    if limit:
+        q = q.limit(limit)
+    return jsonify([e.to_dict() for e in q.all()])
+
+# CSV export (same format import_csv.py reads)
+@bp.route('/aquarium/<int:aquarium_id>/readings.csv')
+def export_readings(aquarium_id):
     aquarium = get_aquarium(aquarium_id)
     if not aquarium:
-        return jsonify({'success': False, 'error': 'Aquarium not found'}), 404
-    
-    if request.method == 'POST':
-        data = request.json
-        maintenance_entry = MaintenanceLog(
-            aquarium_id=aquarium_id,
-            timestamp=datetime.utcnow(),
-            task_type=data.get('task_type'),
-            description=data.get('description'),
-            completed=data.get('completed', True)
-        )
-        
-        try:
-            db.session.add(maintenance_entry)
-            db.session.commit()
-            return jsonify({'success': True, 'id': maintenance_entry.id})
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({'success': False, 'error': str(e)}), 400
-    
-    elif request.method == 'DELETE':
-        entry_id = request.args.get('id', type=int)
-        if not entry_id:
-            return jsonify({'success': False, 'error': 'ID required'}), 400
-        
-        entry = MaintenanceLog.query.filter_by(id=entry_id, aquarium_id=aquarium_id).first()
-        if not entry:
-            return jsonify({'success': False, 'error': 'Entry not found'}), 404
-        
-        try:
-            db.session.delete(entry)
-            db.session.commit()
-            return jsonify({'success': True})
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({'success': False, 'error': str(e)}), 400
-    
-    else:  # GET
-        limit = request.args.get('limit', 50, type=int)
-        entries = MaintenanceLog.query.filter_by(
-            aquarium_id=aquarium_id
-        ).order_by(MaintenanceLog.timestamp.desc()).limit(limit).all()
-        
-        return jsonify([entry.to_dict() for entry in entries])
+        return _err('Aquarium not found', 404)
+    rows = Reading.query.filter_by(aquarium_id=aquarium_id).order_by(Reading.timestamp, Reading.id).all()
+    return _csv(readings_csv(rows, aquarium.name), f'{aquarium.name}_readings.csv')
+
+@bp.route('/aquarium/<int:aquarium_id>/events.csv')
+def export_events(aquarium_id):
+    aquarium = get_aquarium(aquarium_id)
+    if not aquarium:
+        return _err('Aquarium not found', 404)
+    rows = Event.query.filter_by(aquarium_id=aquarium_id).order_by(Event.timestamp, Event.id).all()
+    return _csv(events_csv(rows, aquarium.name), f'{aquarium.name}_events.csv')
+
+def _csv(text, filename):
+    safe = ''.join(c if c.isalnum() or c in '._-' else '_' for c in filename)
+    return Response(text, mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename="{safe}"'})
 
 # Scheduled Tasks API
 @bp.route('/aquarium/<int:aquarium_id>/scheduled', methods=['GET', 'POST', 'PUT', 'DELETE'])
@@ -228,16 +237,14 @@ def scheduled_tasks(aquarium_id):
             task.active = False
         
         # Log completion
-        maintenance_entry = MaintenanceLog(
+        completion = Event(
             aquarium_id=aquarium_id,
-            timestamp=now,
-            task_type=task.task_name,
-            description='Completed scheduled task',
-            completed=True
+            event_type='task_completed',
+            notes=task.task_name,
         )
         
         try:
-            db.session.add(maintenance_entry)
+            db.session.add(completion)
             db.session.commit()
             return jsonify({'success': True})
         except Exception as e:
@@ -375,129 +382,81 @@ def fish_inventory(aquarium_id):
         return jsonify([fish.to_dict() for fish in fish_list])
 
 # Charts API
-@bp.route('/aquarium/<int:aquarium_id>/parameters/chart')
-def parameters_chart(aquarium_id):
-    """Get parameter data formatted for charts"""
-    aquarium = get_aquarium(aquarium_id)
-    if not aquarium:
-        return jsonify({'success': False, 'error': 'Aquarium not found'}), 404
-    
-    days = request.args.get('days', 30, type=int)
-    since_date = datetime.utcnow() - timedelta(days=days)
-    
-    parameters = WaterParameter.query.filter(
-        WaterParameter.aquarium_id == aquarium_id,
-        WaterParameter.timestamp >= since_date
-    ).order_by(WaterParameter.timestamp.asc()).all()
-    
-    # Format data for Chart.js
-    chart_data = {
-        'labels': [],
-        'datasets': {
-            'temperature': {
-                'label': 'Temperature (°F)',
-                'data': [],
-                'borderColor': '#ff6b9d',
-                'backgroundColor': 'rgba(255, 107, 157, 0.1)',
-                'yAxisID': 'y'
-            },
-            'ph': {
-                'label': 'pH',
-                'data': [],
-                'borderColor': '#4ecdc4',
-                'backgroundColor': 'rgba(78, 205, 196, 0.1)',
-                'yAxisID': 'y1'
-            },
-            'ammonia': {
-                'label': 'Ammonia (ppm)',
-                'data': [],
-                'borderColor': '#f7b267',
-                'backgroundColor': 'rgba(247, 178, 103, 0.1)',
-                'yAxisID': 'y1'
-            },
-            'nitrite': {
-                'label': 'Nitrite (ppm)',
-                'data': [],
-                'borderColor': '#2d6a4f',
-                'backgroundColor': 'rgba(45, 106, 79, 0.1)',
-                'yAxisID': 'y1'
-            },
-            'nitrate': {
-                'label': 'Nitrate (ppm)',
-                'data': [],
-                'borderColor': '#e0e040',
-                'backgroundColor': 'rgba(224, 224, 64, 0.1)',
-                'yAxisID': 'y1'
-            },
-            'kh': {
-                'label': 'KH (dKH)',
-                'data': [],
-                'borderColor': '#a78bfa',
-                'backgroundColor': 'rgba(167, 139, 250, 0.1)',
-                'yAxisID': 'y1'
-            },
-            'gh': {
-                'label': 'GH (dGH)',
-                'data': [],
-                'borderColor': '#60a5fa',
-                'backgroundColor': 'rgba(96, 165, 250, 0.1)',
-                'yAxisID': 'y1'
-            },
-            'ec': {
-                'label': 'EC (µS/cm)',
-                'data': [],
-                'borderColor': '#f87171',
-                'backgroundColor': 'rgba(248, 113, 113, 0.1)',
-                'yAxisID': 'y2'
-            }
-        }
-    }
-    
-    for param in parameters:
-        chart_data['labels'].append(param.timestamp.strftime('%m/%d'))
-        
-        for field in PARAM_FIELDS:
-            value = getattr(param, field)
-            chart_data['datasets'][field]['data'].append(
-                float(value) if value is not None else None
-            )
-    
-    return jsonify(chart_data)
+@bp.route('/aquarium/<int:aquarium_id>/chart')
+def chart_data(aquarium_id):
+    """Series per chart group. 'bad' readings are left out; 'suspect' are flagged
+    per point. Includes water changes (vertical markers) and CO2 bubble rate."""
+    if not get_aquarium(aquarium_id):
+        return _err('Aquarium not found', 404)
+    since = _since()
+
+    q = Reading.query.filter(Reading.aquarium_id == aquarium_id, Reading.quality != 'bad')
+    if since:
+        q = q.filter(Reading.timestamp >= since)
+    groups = {}
+    for r in q.order_by(Reading.timestamp).all():
+        if r.parameter not in PARAMETERS:
+            continue
+        label, unit, _, group = PARAMETERS[r.parameter]
+        g = groups.setdefault(group, {'key': group, 'title': CHART_GROUPS.get(group, label), 'series': {}})
+        s = g['series'].setdefault(r.parameter, {'parameter': r.parameter, 'label': label, 'unit': unit, 'points': []})
+        s['points'].append({'t': r.timestamp.isoformat(timespec='minutes'), 'time_known': r.time_known,
+                            'y': r.value, 'min': r.value_min, 'max': r.value_max,
+                            'method': r.method, 'quality': r.quality, 'notes': r.notes})
+
+    eq = Event.query.filter(Event.aquarium_id == aquarium_id,
+                            Event.event_type.in_(('water_change', 'co2_bubble_rate')))
+    if since:
+        eq = eq.filter(Event.timestamp >= since)
+    evs = eq.order_by(Event.timestamp).all()
+    co2 = [e for e in evs if e.event_type == 'co2_bubble_rate' and e.value is not None]
+    if since:
+        # last bubble-rate setting before the window, so the step line starts at the left edge
+        prior = Event.query.filter(Event.aquarium_id == aquarium_id, Event.event_type == 'co2_bubble_rate',
+                                   Event.value.isnot(None), Event.timestamp < since
+                                   ).order_by(Event.timestamp.desc()).first()
+        if prior:
+            co2.insert(0, prior)
+
+    order = list(CHART_GROUPS)
+    return jsonify({
+        'groups': sorted(groups.values(), key=lambda g: order.index(g['key']) if g['key'] in order else 99),
+        'water_changes': [{'t': e.timestamp.isoformat(timespec='minutes'), 'value': e.value, 'notes': e.notes}
+                          for e in evs if e.event_type == 'water_change'],
+        'co2_bubble_rate': [{'t': e.timestamp.isoformat(timespec='minutes'), 'y': e.value, 'notes': e.notes}
+                            for e in co2],
+    })
+
+def latest_readings(aquarium_id):
+    """Most recent non-bad reading per parameter: {parameter: Reading}."""
+    sub = db.session.query(Reading.parameter, db.func.max(Reading.timestamp).label('ts')).filter(
+        Reading.aquarium_id == aquarium_id, Reading.quality != 'bad').group_by(Reading.parameter).subquery()
+    rows = Reading.query.join(sub, db.and_(Reading.parameter == sub.c.parameter, Reading.timestamp == sub.c.ts)
+                              ).filter(Reading.aquarium_id == aquarium_id, Reading.quality != 'bad'
+                              ).order_by(Reading.id).all()
+    return {r.parameter: r for r in rows}
 
 # Stats API
 @bp.route('/aquarium/<int:aquarium_id>/stats')
 def aquarium_stats(aquarium_id):
     """Get summary statistics for an aquarium"""
-    aquarium = get_aquarium(aquarium_id)
-    if not aquarium:
-        return jsonify({'success': False, 'error': 'Aquarium not found'}), 404
-    
-    # Latest parameters
-    latest_params = WaterParameter.query.filter_by(
-        aquarium_id=aquarium_id
-    ).order_by(WaterParameter.timestamp.desc()).first()
-    
-    # Upcoming tasks
+    if not get_aquarium(aquarium_id):
+        return _err('Aquarium not found', 404)
     upcoming_tasks = ScheduledTask.query.filter(
         ScheduledTask.aquarium_id == aquarium_id,
         ScheduledTask.active == True,
         ScheduledTask.next_due <= datetime.utcnow() + timedelta(days=7)
     ).count()
-    
-    # Total fish
     total_fish = db.session.query(db.func.sum(FishInventory.held)).filter_by(
         aquarium_id=aquarium_id
     ).scalar() or 0
-    
-    # Recent maintenance count
-    recent_maintenance = MaintenanceLog.query.filter(
-        MaintenanceLog.aquarium_id == aquarium_id,
-        MaintenanceLog.timestamp >= datetime.utcnow() - timedelta(days=30)
+    recent_events = Event.query.filter(
+        Event.aquarium_id == aquarium_id,
+        Event.timestamp >= datetime.now() - timedelta(days=30)
     ).count()
-    
     return jsonify({
-        'latest_parameters': latest_params.to_dict() if latest_params else None,
+        'latest_readings': {k: r.to_dict() for k, r in latest_readings(aquarium_id).items()},
         'upcoming_tasks': upcoming_tasks,
         'total_fish': total_fish,
-        'recent_maintenance': recent_maintenance
+        'recent_events': recent_events,
     })
