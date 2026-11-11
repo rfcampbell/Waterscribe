@@ -47,9 +47,14 @@ up to 24 h. The level resets after a day without a lockout. While a lockout is i
 passphrase is not even checked, so a correct guess fails too. Every failure gets the same page,
 with a 401 and at least 1 s of delay, whether it was a wrong passphrase, a lockout or an expired
 link. Each failure also uses up that sign-in, so a retry starts again from claude.ai. The real
-reason is written only to the audit log (`oauth.login_failed`, `oauth.lockout`). The client IP is
-the rightmost `X-Forwarded-For` entry added by tailscaled. Lockouts survive restarts in
-`login_limits.json`.
+reason is written only to the audit log (`oauth.login_failed`, `oauth.lockout`). Lockouts survive
+restarts in `login_limits.json`.
+
+The client IP comes from `X-Forwarded-For`, and only for connections from loopback, which means
+tailscaled. This was verified with tcpdump on the live funnel on 2026-11-11. tailscaled *replaces*
+whatever `X-Forwarded-For` the client sent with the real client address, so a forged value is
+dropped. It also adds `Tailscale-Funnel-Request: ?1`. It passes **`X-Real-Ip` through from the
+client unchanged**, so that header is forgeable and must never be trusted. Nothing here reads it.
 
 Lockouts gate only the passphrase page. Existing bearer tokens and refresh-token grants are never
 checked against them, so a lockout can't cut off a connected claude.ai (`tests/test_scope.py`).
@@ -92,7 +97,8 @@ sudo systemctl daemon-reload && sudo systemctl enable --now waterscribe-mcp
 sudo tailscale funnel --bg 8765         # https://robix.tailaf4333.ts.net -> 127.0.0.1:8765, persists
 ```
 
-`tailscale funnel --bg` is saved in tailscaled's own state, so it comes back after a reboot.
+`tailscale funnel --bg` is saved in tailscaled's own state. It is verified to survive a
+`systemctl restart tailscaled`.
 Check it with `tailscale funnel status`. Remove it with `sudo tailscale funnel --https=443 off`.
 
 Tailscale admin console prerequisites: MagicDNS on, HTTPS certificates on (DNS page), and the
