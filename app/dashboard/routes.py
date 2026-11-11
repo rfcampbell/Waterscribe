@@ -1,6 +1,7 @@
 """
 Dashboard routes - main UI and aquarium management
 """
+from app.utils import parse_number
 from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 
@@ -72,12 +73,19 @@ def create_aquarium():
     """Create a new aquarium"""
     if request.method == 'POST':
         data = request.get_json() if request.is_json else request.form
+        try:
+            volume = parse_number(data.get('volume_gallons'), minimum=0)
+        except ValueError:
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'Volume must be a number'}), 400
+            flash('Volume must be a number.', 'danger')
+            return redirect(url_for('dashboard.index'))
         
         aquarium = Aquarium(
             user_id=current_user.id,
             name=data.get('name'),
             type=data.get('type'),
-            volume_gallons=float(data.get('volume_gallons')) if data.get('volume_gallons') else None,
+            volume_gallons=volume,
             description=data.get('description')
         )
         
@@ -110,7 +118,14 @@ def edit_aquarium(aquarium_id):
     
     aquarium.name = data.get('name', aquarium.name)
     aquarium.type = data.get('type', aquarium.type)
-    aquarium.volume_gallons = float(data.get('volume_gallons')) if data.get('volume_gallons') else aquarium.volume_gallons
+    if 'volume_gallons' in data:
+        try:
+            aquarium.volume_gallons = parse_number(data.get('volume_gallons'), minimum=0)
+        except ValueError:
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'Volume must be a number'}), 400
+            flash('Volume must be a number.', 'danger')
+            return redirect(url_for('dashboard.index', aquarium_id=aquarium_id))
     aquarium.description = data.get('description', aquarium.description)
     
     try:

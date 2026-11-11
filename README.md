@@ -8,7 +8,7 @@ Track water parameters, schedule maintenance, manage fish inventory, and monitor
 
 ## Features
 
-- **Water Parameters** — Log temperature, pH, ammonia, nitrite, nitrate with timestamps and notes
+- **Water Parameters** — Log temperature, pH, ammonia, nitrite, nitrate, EC, KH and GH with timestamps and notes; edit or delete any reading
 - **Charts** — Visualize parameter trends over 7/30/90 days with multi-axis Chart.js graphs
 - **Scheduled Tasks** — Recurring and one-time maintenance reminders
 - **Fish Inventory** — Track species with held/planned counts, auto-fetched Wikipedia thumbnails and species info

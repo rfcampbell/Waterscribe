@@ -11,20 +11,17 @@ from app.api import bp
 from app.models import db, Aquarium, WaterParameter, MaintenanceLog, ScheduledTask, FishInventory
 from app.notifications import notify_task_created
 from app.fish_images import fetch_fish_image, fetch_species_info
+from app.utils import parse_number
 
 def get_user_aquarium(aquarium_id):
     """Helper to get aquarium that belongs to current user"""
     return Aquarium.query.filter_by(id=aquarium_id, user_id=current_user.id).first()
 
-PARAM_FIELDS = ('temperature', 'ph', 'ammonia', 'nitrite', 'nitrate')
+PARAM_FIELDS = ('temperature', 'ph', 'ammonia', 'nitrite', 'nitrate', 'ec', 'kh', 'gh')
 
 def parse_params(data):
     """Blank form fields -> None; raises ValueError on non-numeric input."""
-    out = {}
-    for f in PARAM_FIELDS:
-        v = data.get(f)
-        out[f] = None if v is None or str(v).strip() == '' else float(v)
-    return out
+    return {f: parse_number(data.get(f)) for f in PARAM_FIELDS}
 
 # Water Parameters API
 @bp.route('/aquarium/<int:aquarium_id>/parameters', methods=['GET', 'POST', 'PUT', 'DELETE'])
@@ -165,14 +162,18 @@ def scheduled_tasks(aquarium_id):
         is_recurring = data.get('is_recurring', True)
         
         if is_recurring:
-            if not data.get('frequency_days'):
+            try:
+                frequency_days = parse_number(data.get('frequency_days'), int, minimum=1)
+            except ValueError:
+                return jsonify({'success': False, 'error': 'Frequency must be a whole number of days'}), 400
+            if not frequency_days:
                 return jsonify({'success': False, 'error': 'Frequency is required for recurring tasks'}), 400
             
-            next_due = datetime.utcnow() + timedelta(days=data['frequency_days'])
+            next_due = datetime.utcnow() + timedelta(days=frequency_days)
             task = ScheduledTask(
                 aquarium_id=aquarium_id,
                 task_name=data['task_name'],
-                frequency_days=data['frequency_days'],
+                frequency_days=frequency_days,
                 next_due=next_due,
                 description=data.get('description'),
                 active=True,
@@ -285,6 +286,11 @@ def fish_inventory(aquarium_id):
     
     if request.method == 'POST':
         data = request.json
+        try:
+            held = parse_number(data.get('held'), int, default=0, minimum=0)
+            planned = parse_number(data.get('planned'), int, default=0, minimum=0)
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Held and planned must be whole numbers'}), 400
         # Fetch thumbnail from Wikipedia
         image_url = None
         try:
@@ -305,8 +311,8 @@ def fish_inventory(aquarium_id):
             aquarium_id=aquarium_id,
             species=data['species'],
             common_name=data.get('common_name'),
-            held=data.get('held', 0),
-            planned=data.get('planned', 0),
+            held=held,
+            planned=planned,
             notes=data.get('notes'),
             image_url=image_url,
             species_info=species_info
@@ -330,10 +336,13 @@ def fish_inventory(aquarium_id):
         if not fish:
             return jsonify({'success': False, 'error': 'Fish not found'}), 404
         
-        if 'held' in data:
-            fish.held = data['held']
-        if 'planned' in data:
-            fish.planned = data['planned']
+        try:
+            if 'held' in data:
+                fish.held = parse_number(data['held'], int, default=0, minimum=0)
+            if 'planned' in data:
+                fish.planned = parse_number(data['planned'], int, default=0, minimum=0)
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Held and planned must be whole numbers'}), 400
         if 'species' in data:
             fish.species = data['species']
         if 'common_name' in data:
@@ -427,6 +436,27 @@ def parameters_chart(aquarium_id):
                 'borderColor': '#e0e040',
                 'backgroundColor': 'rgba(224, 224, 64, 0.1)',
                 'yAxisID': 'y1'
+            },
+            'kh': {
+                'label': 'KH (dKH)',
+                'data': [],
+                'borderColor': '#a78bfa',
+                'backgroundColor': 'rgba(167, 139, 250, 0.1)',
+                'yAxisID': 'y1'
+            },
+            'gh': {
+                'label': 'GH (dGH)',
+                'data': [],
+                'borderColor': '#60a5fa',
+                'backgroundColor': 'rgba(96, 165, 250, 0.1)',
+                'yAxisID': 'y1'
+            },
+            'ec': {
+                'label': 'EC (µS/cm)',
+                'data': [],
+                'borderColor': '#f87171',
+                'backgroundColor': 'rgba(248, 113, 113, 0.1)',
+                'yAxisID': 'y2'
             }
         }
     }
@@ -434,7 +464,7 @@ def parameters_chart(aquarium_id):
     for param in parameters:
         chart_data['labels'].append(param.timestamp.strftime('%m/%d'))
         
-        for field in ['temperature', 'ph', 'ammonia', 'nitrite', 'nitrate']:
+        for field in PARAM_FIELDS:
             value = getattr(param, field)
             chart_data['datasets'][field]['data'].append(
                 float(value) if value is not None else None

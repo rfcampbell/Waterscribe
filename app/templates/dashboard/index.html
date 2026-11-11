@@ -299,6 +299,18 @@
                 <input type="number" name="nitrate" step="0.1" min="0" placeholder="10.0" class="form-control">
             </div>
             <div class="form-group">
+                <label class="form-label">EC (µS/cm)</label>
+                <input type="number" name="ec" step="1" min="0" placeholder="350" class="form-control">
+            </div>
+            <div class="form-group">
+                <label class="form-label">KH (dKH)</label>
+                <input type="number" name="kh" step="0.1" min="0" placeholder="4" class="form-control">
+            </div>
+            <div class="form-group">
+                <label class="form-label">GH (dGH)</label>
+                <input type="number" name="gh" step="0.1" min="0" placeholder="6" class="form-control">
+            </div>
+            <div class="form-group">
                 <label class="form-label">Notes</label>
                 <textarea name="notes" placeholder="Any observations..." class="form-control"></textarea>
             </div>
@@ -307,19 +319,23 @@
             </div>
         </form>
         <div id="parameters-log" class="log-container">
+            {% macro val(v, unit='') %}{{ v ~ unit if v is not none else 'N/A' }}{% endmacro %}
             {% for param in recent_parameters %}
-                <div class="log-item" id="param-{{ param.id }}" data-param='{{ {"temperature": param.temperature, "ph": param.ph, "ammonia": param.ammonia, "nitrite": param.nitrite, "nitrate": param.nitrate, "notes": param.notes} | tojson | forceescape }}'>
+                <div class="log-item" id="param-{{ param.id }}" data-param='{{ {"temperature": param.temperature, "ph": param.ph, "ammonia": param.ammonia, "nitrite": param.nitrite, "nitrate": param.nitrate, "ec": param.ec, "kh": param.kh, "gh": param.gh, "notes": param.notes} | tojson | forceescape }}'>
                     <div class="log-actions">
                         <button class="btn btn-small btn-secondary" onclick="editParameters({{ param.id }})">Edit</button>
                         <button class="btn btn-small btn-danger" onclick="deleteParameters({{ param.id }})">Delete</button>
                     </div>
                     <div class="log-timestamp">{{ param.timestamp.strftime('%Y-%m-%d %H:%M') }}</div>
                     <div class="log-content">
-                        <strong>Temperature:</strong> {{ param.temperature or 'N/A' }}°F &nbsp;
-                        <strong>pH:</strong> {{ param.ph or 'N/A' }} &nbsp;
-                        <strong>Ammonia:</strong> {{ param.ammonia or 'N/A' }}ppm &nbsp;
-                        <strong>Nitrite:</strong> {{ param.nitrite or 'N/A' }}ppm &nbsp;
-                        <strong>Nitrate:</strong> {{ param.nitrate or 'N/A' }}ppm
+                        <strong>Temperature:</strong> {{ val(param.temperature, '°F') }} &nbsp;
+                        <strong>pH:</strong> {{ val(param.ph) }} &nbsp;
+                        <strong>Ammonia:</strong> {{ val(param.ammonia, 'ppm') }} &nbsp;
+                        <strong>Nitrite:</strong> {{ val(param.nitrite, 'ppm') }} &nbsp;
+                        <strong>Nitrate:</strong> {{ val(param.nitrate, 'ppm') }}
+                        {% if param.ec is not none %}&nbsp; <strong>EC:</strong> {{ val(param.ec, ' µS/cm') }}{% endif %}
+                        {% if param.kh is not none %}&nbsp; <strong>KH:</strong> {{ val(param.kh, ' dKH') }}{% endif %}
+                        {% if param.gh is not none %}&nbsp; <strong>GH:</strong> {{ val(param.gh, ' dGH') }}{% endif %}
                         {% if param.notes %}<br><br><strong>Notes:</strong> {{ param.notes }}{% endif %}
                     </div>
                 </div>
@@ -556,6 +572,8 @@
             if (result.success) {
                 event.target.reset();
                 location.reload();
+            } else {
+                alert(result.error || 'Failed to save task');
             }
         } catch (error) {
             alert('Failed to save task');
@@ -572,6 +590,8 @@
             if (result.success) {
                 event.target.reset();
                 location.reload();
+            } else {
+                alert(result.error || 'Failed to log maintenance');
             }
         } catch (error) {
             alert('Failed to log maintenance');
@@ -588,6 +608,8 @@
             if (result.success) {
                 event.target.reset();
                 loadFish();
+            } else {
+                alert(result.error || 'Failed to add fish');
             }
         } catch (error) {
             alert('Failed to add fish');
@@ -683,6 +705,18 @@
                         y: {
                             ticks: { color: '#f0f4f8' },
                             grid: { color: 'rgba(240, 244, 248, 0.1)' }
+                        },
+                        y1: {
+                            position: 'left',
+                            ticks: { color: '#f0f4f8' },
+                            grid: { drawOnChartArea: false }
+                        },
+                        y2: {
+                            position: 'right',
+                            display: 'auto',
+                            title: { display: true, text: 'EC (µS/cm)', color: '#f0f4f8' },
+                            ticks: { color: '#f0f4f8' },
+                            grid: { drawOnChartArea: false }
                         }
                     }
                 }
@@ -698,7 +732,7 @@
             const params = await api(`/api/aquarium/${currentAquariumId}/parameters`);
             if (!params.length) { alert('No data to export'); return; }
             
-            const headers = ['Date', 'Temperature (°F)', 'pH', 'Ammonia (ppm)', 'Nitrite (ppm)', 'Nitrate (ppm)', 'Notes'];
+            const headers = ['Date', 'Temperature (°F)', 'pH', 'Ammonia (ppm)', 'Nitrite (ppm)', 'Nitrate (ppm)', 'EC (µS/cm)', 'KH (dKH)', 'GH (dGH)', 'Notes'];
             const rows = params.map(p => [
                 p.timestamp,
                 p.temperature ?? '',
@@ -706,6 +740,9 @@
                 p.ammonia ?? '',
                 p.nitrite ?? '',
                 p.nitrate ?? '',
+                p.ec ?? '',
+                p.kh ?? '',
+                p.gh ?? '',
                 (p.notes || '').replace(/"/g, '""')
             ].map(v => `"${v}"`).join(','));
             
@@ -749,7 +786,7 @@
         }
     }
 
-    const PARAM_FIELDS = [['temperature', 'Temp °F', '0.1'], ['ph', 'pH', '0.1'], ['ammonia', 'NH3', '0.01'], ['nitrite', 'NO2', '0.01'], ['nitrate', 'NO3', '0.1']];
+    const PARAM_FIELDS = [['temperature', 'Temp °F', '0.1'], ['ph', 'pH', '0.1'], ['ammonia', 'NH3', '0.01'], ['nitrite', 'NO2', '0.01'], ['nitrate', 'NO3', '0.1'], ['ec', 'EC', '1'], ['kh', 'KH', '0.1'], ['gh', 'GH', '0.1']];
 
     function editParameters(id) {
         const item = document.getElementById(`param-${id}`);
@@ -798,7 +835,8 @@
         const held = parseInt(document.getElementById(`edit-held-${id}`).value) || 0;
         const planned = parseInt(document.getElementById(`edit-planned-${id}`).value) || 0;
         try {
-            await api(`/api/aquarium/${currentAquariumId}/fish`, 'PUT', { id, held, planned });
+            const result = await api(`/api/aquarium/${currentAquariumId}/fish`, 'PUT', { id, held, planned });
+            if (!result.success) alert(result.error || 'Failed to update fish');
             loadFish();
         } catch (error) {
             alert('Failed to update fish');

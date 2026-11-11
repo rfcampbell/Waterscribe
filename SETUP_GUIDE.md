@@ -4,7 +4,7 @@ A beautiful web-based aquarium management system with scheduling, parameter trac
 
 ## Features
 
-- **Water Parameter Tracking**: Log temperature, pH, ammonia, nitrite, and nitrate levels
+- **Water Parameter Tracking**: Log temperature, pH, ammonia, nitrite, nitrate, EC, KH and GH
 - **Scheduled Maintenance**: Set up recurring tasks with automatic reminders
 - **Maintenance History**: Keep detailed logs of all maintenance activities
 - **Fish Inventory**: Track your aquatic life with species information

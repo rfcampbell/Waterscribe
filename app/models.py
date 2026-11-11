@@ -67,6 +67,9 @@ class WaterParameter(db.Model):
     ammonia = db.Column(db.Float)
     nitrite = db.Column(db.Float)
     nitrate = db.Column(db.Float)
+    ec = db.Column(db.Float)  # µS/cm
+    kh = db.Column(db.Float)  # dKH
+    gh = db.Column(db.Float)  # dGH
     notes = db.Column(db.Text)
     
     def to_dict(self):
@@ -80,6 +83,9 @@ class WaterParameter(db.Model):
             'ammonia': self.ammonia,
             'nitrite': self.nitrite,
             'nitrate': self.nitrate,
+            'ec': self.ec,
+            'kh': self.kh,
+            'gh': self.gh,
             'notes': self.notes
         }
     
