@@ -1,0 +1,9 @@
+[Unit]
+Description=Back up WaterScribe Postgres DB
+After=postgresql.service
+OnFailure=robix-alert@%n.service
+
+[Service]
+Type=oneshot
+User=rcampbell
+ExecStart=/home/rcampbell/aquarium-tracker/aquarium-tracker/deploy/backup-db

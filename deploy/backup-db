@@ -1,0 +1,58 @@
+#!/bin/sh
+# Nightly pg_dump of the WaterScribe DB. Keeps 30 days of waterscribe-nightly-* (manual dumps in
+# the same dir are never rotated). Then verifies the dump: restores it into a scratch DB and
+# compares every table's row count and the alembic version with live. Exits non-zero -- so the
+# systemd unit fails and robix-alert fires -- if the dump, restore or comparison fails.
+set -eu
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+DIR=${WATERSCRIBE_BACKUPS:-$HOME/waterscribe-backups}
+KEEP_DAYS=${WATERSCRIBE_KEEP_DAYS:-30}
+
+# DATABASE_URL from the app's .env unless already set (tests point it elsewhere)
+if [ -z "${DATABASE_URL:-}" ]; then
+    set -a; . "$ROOT/.env"; set +a
+fi
+: "${DATABASE_URL:?not set (expected in $ROOT/.env)}"
+
+mkdir -p "$DIR"
+out="$DIR/waterscribe-nightly-$(date +%Y%m%d-%H%M%S).dump"
+pg_dump -Fc "$DATABASE_URL" -f "$out.partial"
+mv "$out.partial" "$out"   # a dump killed midway never gets the final name
+
+scratch=ws_verify_nightly_$$
+scratch_url="${DATABASE_URL%/*}/$scratch"
+verified=
+cleanup() {
+    psql -q "$DATABASE_URL" -c "DROP DATABASE IF EXISTS $scratch" >/dev/null 2>&1 || true
+    # a dump that failed verification must not look like a good one
+    if [ -z "$verified" ] && [ -f "$out" ]; then
+        mv "$out" "$out.unverified" && echo "kept failed dump as $out.unverified" >&2
+    fi
+}
+trap cleanup EXIT
+psql -q "$DATABASE_URL" -c "CREATE DATABASE $scratch" >/dev/null
+pg_restore --no-owner --exit-on-error -d "$scratch_url" "$out"
+
+counts() {
+    tables=$(psql -At "$1" -c "select tablename from pg_tables where schemaname='public' order by 1")
+    [ -n "$tables" ] || { echo "no tables in $2" >&2; exit 1; }
+    for t in $tables; do
+        echo "$t $(psql -At "$1" -c "select count(*) from \"$t\"")"
+    done
+    echo "alembic_version $(psql -At "$1" -c 'select version_num from alembic_version')"
+}
+live=$(counts "$DATABASE_URL" live)
+restored=$(counts "$scratch_url" restored)
+if [ "$live" != "$restored" ]; then
+    echo "verify FAILED for $out: restored copy differs from live" >&2
+    printf 'live:\n%s\nrestored:\n%s\n' "$live" "$restored" >&2
+    exit 1
+fi
+verified=1
+
+find "$DIR" -name 'waterscribe-nightly-*.dump' -mtime +$((KEEP_DAYS - 1)) -delete
+find "$DIR" -name 'waterscribe-nightly-*.dump.partial' -mtime +1 -delete
+find "$DIR" -name 'waterscribe-nightly-*.dump.unverified' -mtime +$((KEEP_DAYS - 1)) -delete
+summary=$(printf '%s\n' "$live" | grep -E '^(aquariums|readings|events) ' | tr '\n' ' ')
+version=$(printf '%s\n' "$live" | tail -1 | cut -d' ' -f2)
+echo "backed up and verified $out ($(du -h "$out" | cut -f1)): ${summary}schema $version"

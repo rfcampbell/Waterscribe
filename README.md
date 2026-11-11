@@ -87,6 +87,20 @@ is unknown (stored at 12:00, shown as date only). Units are checked against `app
 Any invalid row aborts the whole file; rows already stored are skipped, so re-running is safe.
 Times are local wall-clock time, not UTC.
 
+### Backups
+
+`deploy/backup-db` runs nightly at 03:45 (`deploy/waterscribe-backup.timer`, installed in
+`/etc/systemd/system/`). It writes `~/waterscribe-backups/waterscribe-nightly-*.dump`, keeps 30 days,
+and verifies each dump by restoring it into a scratch DB and comparing every table's row count and
+the schema version with live. A dump that fails verification is renamed `*.unverified`; the unit
+fails and `OnFailure=robix-alert@` notifies Home Assistant. Backups are on robix's own disk only.
+
+```bash
+systemctl list-timers waterscribe-backup.timer          # next/last run
+journalctl -u waterscribe-backup -n 5                   # last result
+pg_restore --clean --if-exists --no-owner -d "$DATABASE_URL" ~/waterscribe-backups/<dump>   # restore
+```
+
 ### Slack Notifications (Optional)
 
 Add `SLACK_BOT_TOKEN` and `SLACK_NOTIFY_USER` to your `.env` to enable:
