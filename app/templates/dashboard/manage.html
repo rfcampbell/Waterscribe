@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+    .manage-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 15px;
+        flex-wrap: wrap;
+        margin-bottom: 25px;
+    }
+
+    .manage-header h1 {
+        font-size: 1.8rem;
+        font-weight: 600;
+    }
+
+    .panel {
+        background: rgba(240, 244, 248, 0.05);
+        backdrop-filter: blur(10px);
+        padding: 22px;
+        border-radius: 16px;
+        border: 1px solid rgba(240, 244, 248, 0.1);
+        margin-bottom: 18px;
+        animation: fadeIn 0.4s ease;
+    }
+
+    .tank-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 15px;
+        flex-wrap: wrap;
+    }
+
+    .tank-name {
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: var(--seafoam);
+        text-decoration: none;
+    }
+
+    .tank-name:hover { text-decoration: underline; }
+
+    .tank-meta {
+        color: rgba(240, 244, 248, 0.7);
+        font-size: 0.9rem;
+        margin-top: 4px;
+    }
+
+    .tank-desc {
+        margin-top: 8px;
+        opacity: 0.85;
+        white-space: pre-wrap;
+    }
+
+    .tank-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .tank-actions .btn,
+    .form-actions .btn {
+        padding: 8px 18px;
+    }
+
+    .edit-form {
+        display: none;
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid rgba(240, 244, 248, 0.1);
+    }
+
+    .panel.editing .edit-form { display: block; }
+    .panel.editing .tank-actions .edit-toggle { display: none; }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr;
+        gap: 0 15px;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .empty {
+        text-align: center;
+        opacity: 0.7;
+        padding: 30px;
+    }
+
+    @media (max-width: 768px) {
+        .form-grid { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<datalist id="tank-types">
+    <option value="Freshwater">
+    <option value="Planted">
+    <option value="Saltwater">
+    <option value="Reef">
+    <option value="Brackish">
+</datalist>
+
+<div class="manage-header">
+    <h1>Manage Aquariums</h1>
+    {% if aquariums %}
+    <a href="{{ url_for('dashboard.index') }}" class="btn btn-secondary">&larr; Dashboard</a>
+    {% endif %}
+</div>
+
+{% for a in aquariums %}
+{% set c = counts[a.id] %}
+<div class="panel" id="tank-{{ a.id }}">
+    <div class="tank-row">
+        <div>
+            <a class="tank-name" href="{{ url_for('dashboard.index', aquarium_id=a.id) }}">{{ a.name }}</a>
+            <div class="tank-meta">
+                {{ a.type or 'No type set' }}
+                &middot; {% if a.volume_gallons is not none %}{{ '%g' % a.volume_gallons }} gal{% else %}Volume not set{% endif %}
+                &middot; {{ c.readings }} readings, {{ c.maintenance }} maintenance, {{ c.tasks }} tasks, {{ c.fish }} fish entries
+            </div>
+            {% if a.description %}<div class="tank-desc">{{ a.description }}</div>{% endif %}
+        </div>
+        <div class="tank-actions">
+            <button type="button" class="btn btn-secondary edit-toggle" onclick="toggleEdit({{ a.id }}, true)">Edit</button>
+            <form method="post" action="{{ url_for('dashboard.delete_aquarium', aquarium_id=a.id) }}"
+                  onsubmit="return confirm({{ ('Delete \"' ~ a.name ~ '\"? This permanently removes its ' ~ c.readings ~ ' readings, ' ~ c.maintenance ~ ' maintenance entries, ' ~ c.tasks ~ ' tasks and ' ~ c.fish ~ ' fish entries.')|tojson|forceescape }});">
+                <button type="submit" class="btn btn-danger">Delete</button>
+            </form>
+        </div>
+    </div>
+
+    <form class="edit-form" method="post" action="{{ url_for('dashboard.edit_aquarium', aquarium_id=a.id) }}">
+        <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label" for="name-{{ a.id }}">Name</label>
+                <input class="form-control" id="name-{{ a.id }}" name="name" value="{{ a.name }}" required maxlength="100">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="type-{{ a.id }}">Type</label>
+                <input class="form-control" id="type-{{ a.id }}" name="type" value="{{ a.type or '' }}" list="tank-types" maxlength="50">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="vol-{{ a.id }}">Volume (gal)</label>
+                <input class="form-control" id="vol-{{ a.id }}" name="volume_gallons" type="number" step="any" min="0"
+                       value="{{ '%g' % a.volume_gallons if a.volume_gallons is not none else '' }}">
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="desc-{{ a.id }}">Description</label>
+            <textarea class="form-control" id="desc-{{ a.id }}" name="description" rows="3">{{ a.description or '' }}</textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save</button>
+            <button type="button" class="btn btn-secondary" onclick="toggleEdit({{ a.id }}, false)">Cancel</button>
+        </div>
+    </form>
+</div>
+{% else %}
+<div class="panel empty">You don't have any aquariums yet. Add one below.</div>
+{% endfor %}
+
+<div class="panel">
+    <h2 style="font-size: 1.2rem; font-weight: 600; margin-bottom: 15px;">Add Aquarium</h2>
+    <form method="post" action="{{ url_for('dashboard.create_aquarium') }}">
+        <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label" for="name-new">Name</label>
+                <input class="form-control" id="name-new" name="name" required maxlength="100">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="type-new">Type</label>
+                <input class="form-control" id="type-new" name="type" list="tank-types" maxlength="50">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="vol-new">Volume (gal)</label>
+                <input class="form-control" id="vol-new" name="volume_gallons" type="number" step="any" min="0">
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="desc-new">Description</label>
+            <textarea class="form-control" id="desc-new" name="description" rows="2"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">+ Add Aquarium</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function toggleEdit(id, on) {
+        const panel = document.getElementById(`tank-${id}`);
+        panel.classList.toggle('editing', on);
+        if (on) document.getElementById(`name-${id}`).focus();
+        else panel.querySelector('.edit-form').reset();
+    }
+</script>
+{% endblock %}

@@ -15,10 +15,10 @@ def index():
     # Get user's aquariums
     aquariums = Aquarium.query.filter_by(user_id=current_user.id).order_by(Aquarium.name).all()
     
-    # If no aquariums, redirect to create one
+    # If no aquariums, send them to the manage page to add one
     if not aquariums:
         flash('Welcome! Let\'s set up your first aquarium.', 'info')
-        return redirect(url_for('dashboard.create_aquarium'))
+        return redirect(url_for('dashboard.manage_aquariums'))
     
     # Get the selected aquarium (default to first one)
     selected_id = request.args.get('aquarium_id', type=int)
@@ -79,14 +79,21 @@ def create_aquarium():
             if request.is_json:
                 return jsonify({'success': False, 'error': 'Volume must be a number'}), 400
             flash('Volume must be a number.', 'danger')
-            return redirect(url_for('dashboard.index'))
+            return redirect(url_for('dashboard.manage_aquariums'))
+        
+        name = (data.get('name') or '').strip()
+        if not name:
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'Name is required'}), 400
+            flash('Name is required.', 'danger')
+            return redirect(url_for('dashboard.manage_aquariums'))
         
         aquarium = Aquarium(
             user_id=current_user.id,
-            name=data.get('name'),
-            type=data.get('type'),
+            name=name,
+            type=(data.get('type') or '').strip() or None,
             volume_gallons=volume,
-            description=data.get('description')
+            description=(data.get('description') or '').strip() or None
         )
         
         try:
@@ -106,7 +113,23 @@ def create_aquarium():
             else:
                 flash('Failed to create aquarium. Please try again.', 'danger')
     
-    return render_template('dashboard/create_aquarium.html')
+    return redirect(url_for('dashboard.manage_aquariums'))
+
+@bp.route('/aquariums')
+@login_required
+def manage_aquariums():
+    """List all aquariums with edit/delete"""
+    aquariums = Aquarium.query.filter_by(user_id=current_user.id).order_by(Aquarium.name).all()
+    counts = {}
+    for a in aquariums:
+        counts[a.id] = {
+            'readings': WaterParameter.query.filter_by(aquarium_id=a.id).count(),
+            'maintenance': MaintenanceLog.query.filter_by(aquarium_id=a.id).count(),
+            'tasks': ScheduledTask.query.filter_by(aquarium_id=a.id).count(),
+            'fish': FishInventory.query.filter_by(aquarium_id=a.id).count(),
+        }
+    return render_template('dashboard/manage.html', title='Manage Aquariums',
+                           aquariums=aquariums, counts=counts)
 
 @bp.route('/aquarium/<int:aquarium_id>/edit', methods=['POST'])
 @login_required
@@ -116,8 +139,16 @@ def edit_aquarium(aquarium_id):
     
     data = request.get_json() if request.is_json else request.form
     
-    aquarium.name = data.get('name', aquarium.name)
-    aquarium.type = data.get('type', aquarium.type)
+    if 'name' in data:
+        name = (data.get('name') or '').strip()
+        if not name:
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'Name is required'}), 400
+            flash('Name is required.', 'danger')
+            return redirect(url_for('dashboard.manage_aquariums'))
+        aquarium.name = name
+    if 'type' in data:
+        aquarium.type = (data.get('type') or '').strip() or None
     if 'volume_gallons' in data:
         try:
             aquarium.volume_gallons = parse_number(data.get('volume_gallons'), minimum=0)
@@ -125,8 +156,9 @@ def edit_aquarium(aquarium_id):
             if request.is_json:
                 return jsonify({'success': False, 'error': 'Volume must be a number'}), 400
             flash('Volume must be a number.', 'danger')
-            return redirect(url_for('dashboard.index', aquarium_id=aquarium_id))
-    aquarium.description = data.get('description', aquarium.description)
+            return redirect(url_for('dashboard.manage_aquariums'))
+    if 'description' in data:
+        aquarium.description = (data.get('description') or '').strip() or None
     
     try:
         db.session.commit()
@@ -134,8 +166,8 @@ def edit_aquarium(aquarium_id):
         if request.is_json:
             return jsonify({'success': True})
         else:
-            flash('Aquarium updated successfully!', 'success')
-            return redirect(url_for('dashboard.index', aquarium_id=aquarium_id))
+            flash(f'Aquarium "{aquarium.name}" updated.', 'success')
+            return redirect(url_for('dashboard.manage_aquariums'))
     
     except Exception as e:
         db.session.rollback()
@@ -143,7 +175,7 @@ def edit_aquarium(aquarium_id):
             return jsonify({'success': False, 'error': str(e)}), 400
         else:
             flash('Failed to update aquarium.', 'danger')
-            return redirect(url_for('dashboard.index', aquarium_id=aquarium_id))
+            return redirect(url_for('dashboard.manage_aquariums'))
 
 @bp.route('/aquarium/<int:aquarium_id>/delete', methods=['POST'])
 @login_required
@@ -158,8 +190,8 @@ def delete_aquarium(aquarium_id):
         if request.is_json:
             return jsonify({'success': True})
         else:
-            flash(f'Aquarium "{aquarium.name}" deleted successfully.', 'success')
-            return redirect(url_for('dashboard.index'))
+            flash(f'Aquarium "{aquarium.name}" deleted.', 'success')
+            return redirect(url_for('dashboard.manage_aquariums'))
     
     except Exception as e:
         db.session.rollback()
@@ -167,4 +199,4 @@ def delete_aquarium(aquarium_id):
             return jsonify({'success': False, 'error': str(e)}), 400
         else:
             flash('Failed to delete aquarium.', 'danger')
-            return redirect(url_for('dashboard.index'))
+            return redirect(url_for('dashboard.manage_aquariums'))
