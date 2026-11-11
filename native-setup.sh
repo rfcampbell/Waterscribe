@@ -15,7 +15,8 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Variables
-DB_PASSWORD="8umQ915fFLNxvIBTi4zwRa4y"
+# Generated unless supplied; printed at the end -- pass the same value to deploy.sh
+DB_PASSWORD="${DB_PASSWORD:-$(openssl rand -hex 16)}"
 APP_USER="rcampbell"
 APP_DIR="/home/rcampbell/aquarium-tracker/aquarium-tracker"
 

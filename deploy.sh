@@ -8,8 +8,6 @@ echo "=== WaterScribe v2 Deployment ==="
 
 # Variables
 APP_DIR="/home/rcampbell/aquarium-tracker/aquarium-tracker"
-SECRET_KEY="df1516653db7edb9236086a7e647a45a9100a70ce937c5ba8874c3e51338f1be"
-DB_PASSWORD="8umQ915fFLNxvIBTi4zwRa4y"
 
 cd "$APP_DIR"
 
@@ -27,16 +25,21 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-echo "=== Creating .env file ==="
-cat > .env << EOF
-SECRET_KEY=$SECRET_KEY
+if [ -f .env ]; then
+    echo "=== Keeping existing .env ==="
+else
+    echo "=== Creating .env file ==="
+    : "${DB_PASSWORD:?Set DB_PASSWORD to the password native-setup.sh printed}"
+    cat > .env << EOF
+SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
 FLASK_ENV=production
 DATABASE_URL=postgresql://waterscribe:$DB_PASSWORD@localhost/waterscribe
 EOF
+fi
+set -a; . ./.env; set +a
 
 echo "=== Running Flask database migrations ==="
 export FLASK_APP=wsgi.py
-export DATABASE_URL=postgresql://waterscribe:$DB_PASSWORD@localhost/waterscribe
 
 # Initialize migrations if they don't exist
 if [ ! -d "migrations/versions" ] || [ -z "$(ls -A migrations/versions)" ]; then
