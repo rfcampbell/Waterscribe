@@ -1,15 +1,16 @@
 [Unit]
-Description=WaterScribe Web Application
-After=network.target
+Description=WaterScribe Gunicorn
+After=network.target postgresql.service
 
 [Service]
-Type=simple
 User=rcampbell
-WorkingDirectory=/home/rcampbellyy/waterscribe
-Environment="PATH=/usr/bin:/usr/local/bin"
-ExecStart=/usr/bin/python3 app.py
+Group=rcampbell
+WorkingDirectory=/home/rcampbell/aquarium-tracker/aquarium-tracker
+Environment="PATH=/home/rcampbell/aquarium-tracker/aquarium-tracker/venv/bin"
+EnvironmentFile=/home/rcampbell/aquarium-tracker/aquarium-tracker/.env
+ExecStart=/home/rcampbell/aquarium-tracker/aquarium-tracker/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:5000 wsgi:app
 Restart=always
-RestartSec=10
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target

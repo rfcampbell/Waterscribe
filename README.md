@@ -71,7 +71,7 @@ pip install gunicorn
 gunicorn --workers 3 --bind 127.0.0.1:5000 wsgi:app
 ```
 
-See `deploy/` directory for nginx config and systemd service file examples.
+See `nginx-waterscribe.conf` and `waterscribe.service` (the configs deployed on robix) and `DEPLOYMENT.md`.
 
 ### Slack Notifications (Optional)
 
