@@ -148,6 +148,12 @@ Add `SLACK_BOT_TOKEN` and `SLACK_NOTIFY_USER` to your `.env` to enable:
 | `SLACK_BOT_TOKEN` | No | Slack bot token for notifications |
 | `SLACK_NOTIFY_USER` | No | Slack user ID for DM notifications |
 
+## Future work
+
+- **Per-tank plausible ranges.** `RANGES` in `app/catalog.py` is global. A medaka pond added as a
+  tank would need its own temperature range, since it drops well below 50 °F in winter. That means
+  per-tank overrides, checked in `check_range`.
+
 ## License
 
 MIT
