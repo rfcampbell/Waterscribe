@@ -6,7 +6,8 @@ import time
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))   # find testenv however the tests are run
+import testenv   # first: temp state dir, dead API; puts the server dir on sys.path
 from pydantic import AnyUrl
 from starlette.applications import Starlette
 from starlette.routing import Route

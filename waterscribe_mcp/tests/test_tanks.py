@@ -1,14 +1,12 @@
 """list_tanks flags code-less tanks; tools refuse them."""
 import asyncio
-import os
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
-os.environ.setdefault('WATERSCRIBE_MCP_STATE', tempfile.mkdtemp())
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import server
+sys.path.insert(0, str(Path(__file__).resolve().parent))   # find testenv however the tests are run
+import testenv   # first: temp state dir, dead API
+server = testenv.import_server()
 from mcp.server.mcpserver.exceptions import ToolError
 
 TANKS = [{'id': 4, 'code': '100P', 'name': '100p'}, {'id': 9, 'code': None, 'name': 'Hastatus QT', 'volume_gallons': 10.0}]

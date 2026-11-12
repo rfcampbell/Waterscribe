@@ -67,7 +67,9 @@ venv/bin/python clear-lockouts --all       # global included
 This takes effect immediately, with no restart, and is written to the audit log
 (`oauth.lockouts_cleared`).
 
-Tests: `venv/bin/python -m unittest discover -s tests -v`
+Tests: `venv/bin/python -m unittest discover -s tests -v`. Every test imports `tests/testenv.py`
+first, which forces a `ws_mcp_test_*` temp state dir and a WaterScribe API address nothing listens
+on, and refuses to run if the server loaded the live state dir or the real API anyway.
 
 **Health**: `GET /healthz` is public and unauthenticated, so it says only `{"ok": true}` or
 `{"ok": false}` (503). It means this server and the WaterScribe API both answered, checked live

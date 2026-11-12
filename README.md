@@ -76,10 +76,12 @@ See `nginx-waterscribe.conf` and `waterscribe.service` (the configs deployed on 
 ### Importing CSV
 
 ```bash
-venv/bin/python import_csv.py readings.csv --dry-run   # validate, report, write nothing
+venv/bin/python import_csv.py readings.csv --dry-run   # validate, report, write nothing (read-only transaction)
 venv/bin/python import_csv.py readings.csv
 venv/bin/python import_csv.py events.csv --aquarium 100p
 ```
+
+A dry run is safe against prod: it runs in a `READ ONLY` transaction, so Postgres refuses any write.
 
 Readings columns: `date,time,tank,parameter,value,value_min,value_max,unit,method,quality,notes`.
 Events columns: `date,time,tank,event,value,unit,notes`. The kind is detected from the header,
@@ -120,7 +122,9 @@ the API and the MCP server:
   an error naming the parameter, value and range. Editing a range in `RANGES` is how to allow
   something unusual.
 
-Tests: `venv/bin/python -m unittest discover -s tests -v`
+Tests: `venv/bin/python -m unittest discover -s tests -v`. Tests that need a database set
+`WATERSCRIBE_TEST_DATABASE_URL` to a restored copy named `ws_*`, and refuse to run on anything else
+(prod's `DATABASE_URL` is only in `.env`; nothing loads it into a shell unless you source it).
 
 ### API used by the MCP server
 

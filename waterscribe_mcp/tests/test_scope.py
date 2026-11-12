@@ -6,19 +6,18 @@ import os
 import secrets
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 HERE = Path(__file__).resolve().parents[1]
-STATE = tempfile.mkdtemp()
-os.environ.update(WATERSCRIBE_MCP_STATE=STATE, WATERSCRIBE_MCP_PUBLIC_URL='http://127.0.0.1:8765',
-                  WATERSCRIBE_MCP_PORT='8765', WATERSCRIBE_API='http://127.0.0.1:1')
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))   # find testenv however the tests are run
+import testenv   # first: temp state dir, dead API
+STATE = testenv.STATE
+os.environ.update(WATERSCRIBE_MCP_PUBLIC_URL='http://127.0.0.1:8765', WATERSCRIBE_MCP_PORT='8765')
 import oauth
 (Path(STATE) / 'passphrase').write_text(oauth.hash_passphrase('right passphrase') + '\n')
-import server
+server = testenv.import_server()
 from starlette.testclient import TestClient
 
 REDIRECT = 'http://127.0.0.1:9/cb'

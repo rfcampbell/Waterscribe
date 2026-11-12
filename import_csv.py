@@ -52,6 +52,10 @@ def main():
         sys.exit(f'unrecognised header {header}; expected {READING_COLUMNS} or {EVENT_COLUMNS}')
 
     with app.app_context():
+        if args.dry_run:
+            # first statement of the transaction: Postgres itself refuses any write, so a dry run
+            # is safe against prod whatever the code below does
+            db.session.execute(db.text('SET TRANSACTION READ ONLY'))
         tanks = {(r.get('tank') or '').strip().lower() for r in rows} - {''}
         if args.aquarium:
             aquarium = find_aquarium(args.aquarium)
