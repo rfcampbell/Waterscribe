@@ -83,10 +83,9 @@ def index():
 
 @bp.route('/aquarium/<int:aquarium_id>')
 def aquarium_detail(aquarium_id):
-    """Single aquarium view with all tabs"""
-    aquarium = db.get_or_404(Aquarium, aquarium_id)
-    
-    return render_template('dashboard/aquarium.html', aquarium=aquarium)
+    """Old per-tank URL: the dashboard with that tank selected"""
+    db.get_or_404(Aquarium, aquarium_id)
+    return redirect(url_for('dashboard.index', aquarium_id=aquarium_id))
 
 CODE_RE = re.compile(r'^[A-Z0-9_-]{1,10}$')
 

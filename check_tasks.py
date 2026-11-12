@@ -20,6 +20,13 @@ if os.path.exists(env_path):
                 key, _, value = line.partition('=')
                 os.environ.setdefault(key.strip(), value.strip())
 
+# Same switch as the app's Schedule UI (README: Schedule feature flag). Off: one log line, no DB, no Slack.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from app.config import env_flag
+if not env_flag('FEATURE_SCHEDULE'):
+    print("FEATURE_SCHEDULE is off; not checking scheduled tasks")
+    sys.exit(0)
+
 SLACK_BOT_TOKEN = os.environ.get('SLACK_BOT_TOKEN')
 SLACK_NOTIFY_USER = os.environ.get('SLACK_NOTIFY_USER', 'U085FCXMG')
 DATABASE_URL = os.environ.get('DATABASE_URL')

@@ -17,7 +17,7 @@ Track water parameters, schedule maintenance, manage fish inventory, and monitor
 - **Scheduled Tasks** — Recurring and one-time maintenance reminders. **Hidden by default**: see [Schedule feature flag](#schedule-feature-flag)
 - **Fish Inventory** — Track species with held/planned counts, auto-fetched Wikipedia thumbnails and species info
 - **Events** — Water changes (%), CO2 bubble rate (bubbles/30s), fertilizer dose (ml/day), one-off doses, ammonia doses (ppm), livestock added, filter seeding, cycle complete, drop checker refills, equipment changes and routine maintenance; completed scheduled tasks are logged here too
-- **Multi-Aquarium** — Track multiple tanks; the Manage Aquariums page (`/aquariums`) lists every tank with edit and delete. Every tank has a short unique code (`100P`, `HQT`), which is required (the database enforces it); CSV import and the MCP server name tanks by it. The dashboard switches tanks with code pills, in each tank's **Order** (editable on Manage; new tanks go last), and remembers the last one picked; the **+** pill opens Manage's add form
+- **Multi-Aquarium** — Track multiple tanks; the Manage Aquariums page (`/aquariums`) lists every tank with edit and delete. Every tank has a short unique code (`100P`, `HQT`), which is required (the database enforces it); CSV import and the MCP server name tanks by it. The dashboard switches tanks with code pills, in each tank's **Order** (editable on Manage; new tanks go last), and remembers the last one picked; the **+** pill opens Manage's add form The old per-tank URL `/aquarium/<id>` redirects (302) to `/?aquarium_id=<id>`; an unknown id is a 404.
 - **Target ranges** — Per tank and parameter (plus CO2 pH drop), either end optional, edited under *Target ranges* on Manage Aquariums. Values outside the parameter's plausible range are rejected
 - **CSV Export / Import** — Readings and events export as CSV from the Charts tab; `import_csv.py` reads the same format (see below)
 - **PWA** — Install as a standalone app on iOS/Android from the browser
@@ -154,7 +154,7 @@ non-GET request is blocked and fails the run — so it is safe to run against pr
 
 Add `SLACK_BOT_TOKEN` and `SLACK_NOTIFY_USER` to your `.env` to enable:
 - DM notifications when scheduled tasks are created
-- Periodic due/overdue task alerts via `check_tasks.py` (run via cron)
+- Periodic due/overdue task alerts via `check_tasks.py` (run via cron; only while `FEATURE_SCHEDULE` is on)
 
 ```bash
 # Example crontab entry (8am, 12pm, 5pm)
@@ -177,15 +177,13 @@ Add `SLACK_BOT_TOKEN` and `SLACK_NOTIFY_USER` to your `.env` to enable:
 
 `FEATURE_SCHEDULE` in `.env` is the one switch for Scheduled Tasks. It defaults to off. Off hides every UI entry point: the Schedule tab and its panel, the "N tasks · next: …" part of the header line, and the task count on Manage Aquariums. The Manage delete confirmation still names a tank's tasks if it has any, because deleting the tank deletes them.
 
-Nothing else changes. The `scheduled_tasks` table and its data, the `ScheduledTask` model, the `/api/aquarium/<id>/scheduled` and `/stats` API routes, `check_tasks.py`, the Slack notifications and the tests are all untouched, and the API stays reachable directly.
+`check_tasks.py` reads the same flag. Off, it logs one line (`FEATURE_SCHEDULE is off; not checking scheduled tasks`, under `waterscribe-notify` in the journal) and exits 0 without touching the database or Slack. The cron entry stays. It reads `.env` on every run, so it needs no restart.
+
+Nothing else changes. The `scheduled_tasks` table and its data, the `ScheduledTask` model, the `/api/aquarium/<id>/scheduled` and `/stats` API routes, the DM sent when a task is created through the API, and the tests are all untouched, and the API stays reachable directly.
 
 To restore the feature, set `FEATURE_SCHEDULE=true` in `.env` and restart the app (`sudo systemctl restart waterscribe`). The service reads `.env` only at start, so a `kill -HUP` is not enough. With the flag on, the pages render byte-for-byte as they did before the flag existed. `tests/test_feature_schedule.py` checks both states.
 
 ## Future work
-
-- **Dead route:** `GET /aquarium/<id>` (`aquarium_detail`) renders `dashboard/aquarium.html`, which
-  doesn't exist, so gunicorn drops the connection. Nothing links to it; the dashboard uses
-  `/?aquarium_id=`. Delete the route, or make it redirect.
 
 - **Per-tank plausible ranges.** `RANGES` in `app/catalog.py` is global. A medaka pond added as a
   tank would need its own temperature range, since it drops well below 50 °F in winter. That means
