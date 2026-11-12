@@ -105,11 +105,11 @@ WIN = (time(4, 45), time(13, 45))   # 100P's window
 class Co2Drop(unittest.TestCase):
     """drop = latest ok degassed pH within 14 d - latest ok in-tank pH inside the CO2 window within 2 d."""
 
-    def drop(self, rs, at=NOW, window=WIN):
-        return co2_drop_at(rs, *window, at)
+    def drop(self, rs, at=NOW, window=WIN, events=()):
+        return co2_drop_at(rs, *window, at, events)[:2]
 
-    def tile(self, rs, window=WIN, targets=None):
-        return next((t for t in flat(build_tiles(rs, targets or {}, NOW, window)) if t['key'] == 'co2_drop'), None)
+    def tile(self, rs, window=WIN, targets=None, events=()):
+        return next((t for t in flat(build_tiles(rs, targets or {}, NOW, window, events=events)) if t['key'] == 'co2_drop'), None)
 
     def test_window_membership(self):
         on, off = WIN
@@ -191,6 +191,65 @@ class Co2Drop(unittest.TestCase):
         out = series('co2_drop', rs, [], {}, WIN)
         self.assertEqual(out['points'][1]['pair']['degassed']['y'], 7.6)
         self.assertEqual(series('co2_drop', rs, [], {}, None)['points'], [])
+
+
+def WCH(pct, ts, time_known=True):
+    return SimpleNamespace(event_type='water_change', value=pct, timestamp=ts, time_known=time_known, notes=None)
+
+
+class Co2DropWaterChange(unittest.TestCase):
+    """The degassed reference must be taken after the latest water change of >= 20%."""
+    deg = R('ph_degassed', 7.4, ago(days=5))
+    tank = R('ph', 6.4, NOW.replace(hour=10))
+
+    def at_now(self, events, extra=()):
+        return co2_drop_at([self.deg, self.tank, *extra], *WIN, NOW, events)
+
+    def test_intervening_water_change_blocks_pairing(self):
+        wc = WCH(50, ago(days=3))
+        d, t, blocker = self.at_now([wc])
+        self.assertIsNone(d)
+        self.assertIs(t, self.tank)
+        self.assertIs(blocker, wc)
+        tile = next(x for x in flat(build_tiles([self.deg, self.tank], {}, NOW, WIN, events=[wc])) if x['key'] == 'co2_drop')
+        self.assertIsNone(tile['value'])
+        self.assertEqual(tile['message'], 'new degassed sample needed after water change')
+        self.assertTrue(tile['stale'])
+
+    def test_new_degassed_sample_after_change_allows_it(self):
+        fresh = R('ph_degassed', 7.5, ago(days=2))
+        d, t, blocker = self.at_now([WCH(50, ago(days=3))], [fresh])
+        self.assertIs(d, fresh)
+        self.assertIsNone(blocker)
+
+    def test_sample_at_the_same_moment_as_the_change_still_blocks(self):
+        same = R('ph_degassed', 7.5, ago(days=3))
+        self.assertIsNone(self.at_now([WCH(50, ago(days=3))], [same])[0])
+
+    def test_small_change_does_not_block(self):
+        self.assertIs(self.at_now([WCH(19.9, ago(days=3))])[0], self.deg)
+        self.assertIsNone(self.at_now([WCH(20, ago(days=3))])[0])        # 20% exactly blocks
+
+    def test_change_without_percent_blocks(self):
+        self.assertIsNone(self.at_now([WCH(None, ago(days=3))])[0])
+
+    def test_change_before_the_sample_or_other_events_dont_block(self):
+        other = SimpleNamespace(event_type='filter_clean', value=None, timestamp=ago(days=1), time_known=True, notes=None)
+        self.assertIs(self.at_now([WCH(50, ago(days=6)), other])[0], self.deg)
+
+    def test_blocked_history_points_are_omitted(self):
+        d1 = R('ph_degassed', 7.4, datetime(2026, 11, 1, 6))
+        p1 = R('ph', 6.4, datetime(2026, 11, 1, 9))          # before the change: kept
+        p2 = R('ph', 6.5, datetime(2026, 11, 2, 9))          # after the change: not with d1, fine with d2
+        d2 = R('ph_degassed', 7.6, datetime(2026, 11, 2, 12))
+        p3 = R('ph', 6.6, datetime(2026, 11, 3, 9))          # new sample: kept
+        wc = WCH(50, datetime(2026, 11, 1, 18))
+        pts = co2_series([d1, p1, p2, d2, p3], *WIN, [wc])
+        # (6.5, 7.4) would pair a post-change pH with the pre-change sample: omitted, not plotted
+        self.assertEqual([(p.tank.value, p.degassed.value) for p in pts], [(6.4, 7.4), (6.5, 7.6), (6.6, 7.6)])
+        out = series('co2_drop', [d1, p1, p2, d2, p3], [wc], {}, WIN)
+        self.assertEqual([p['pair']['degassed']['y'] for p in out['points']], [7.4, 7.6, 7.6])
+        self.assertEqual(len(co2_series([d1, p1, p2, d2, p3], *WIN)), 4)   # without the change, (6.5, 7.4) appears
 
 
 class Series(unittest.TestCase):

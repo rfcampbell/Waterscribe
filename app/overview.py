@@ -5,7 +5,7 @@ The pure functions take plain objects (anything with .timestamp/.value/...) so t
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from app.catalog import PARAMETERS, STALE_DAYS, CO2_DROP, CO2_DROP_LABEL, TILE_GROUPS
+from app.catalog import PARAMETERS, STALE_DAYS, CO2_DROP, CO2_DROP_LABEL, TILE_GROUPS, WC_RESETS_DEGASSED_PCT
 
 SPARK_DAYS = 30
 CO2_TANK_DAYS = 2        # in-tank pH (inside the CO2 window) must be this recent
@@ -69,24 +69,36 @@ class Pair:
     quality = 'ok'        # only ok readings are ever paired
 
 
-def co2_drop_at(readings, on, off, at):
-    """CO2 pH drop as of `at`: (degassed, tank), either None if missing.
-    degassed: most recent ok (not suspect, not bad) degassed pH within CO2_DEGASSED_DAYS.
+def resets_degassed(e):
+    return e.event_type == 'water_change' and (e.value is None or e.value >= WC_RESETS_DEGASSED_PCT)
+
+
+def co2_drop_at(readings, on, off, at, events=()):
+    """CO2 pH drop as of `at`: (degassed, tank, blocking water change), each None if absent.
+    degassed: most recent ok (not suspect, not bad) degassed pH within CO2_DEGASSED_DAYS. If it is not
+    strictly after the latest water change >= WC_RESETS_DEGASSED_PCT, it doesn't count: degassed is None
+    and the water change is returned as the reason.
     tank: most recent ok in-tank pH with a known time inside the CO2 window, within CO2_TANK_DAYS."""
     ok = [r for r in readings if r.quality == 'ok' and r.timestamp <= at]
     deg = [r for r in ok if r.parameter == 'ph_degassed' and r.timestamp >= at - timedelta(days=CO2_DEGASSED_DAYS)]
     tank = [r for r in ok if r.parameter == 'ph' and r.time_known and in_window(r.timestamp, on, off)
             and r.timestamp >= at - timedelta(days=CO2_TANK_DAYS)]
     latest = lambda rs: max(rs, key=lambda r: (r.timestamp, r.id or 0)) if rs else None
-    return latest(deg), latest(tank)
+    d = latest(deg)
+    wcs = [e for e in events if resets_degassed(e) and e.timestamp <= at]
+    wc = max(wcs, key=lambda e: e.timestamp) if wcs else None
+    if d and wc and d.timestamp <= wc.timestamp:
+        return None, latest(tank), wc
+    return d, latest(tank), None
 
 
-def co2_series(readings, on, off):
-    """The drop over time: the rule evaluated at each reading that could change it. Oldest first."""
+def co2_series(readings, on, off, events=()):
+    """The drop over time: the rule evaluated at each reading that could change it. Oldest first.
+    Moments when the rule fails (e.g. degassed sample predates a water change) give no point."""
     pairs, seen = [], set()
     times = sorted({r.timestamp for r in readings if r.quality == 'ok' and r.parameter in ('ph', 'ph_degassed')})
     for t in times:
-        deg, tank = co2_drop_at(readings, on, off, t)
+        deg, tank, _ = co2_drop_at(readings, on, off, t, events)
         if deg and tank and (id(deg), id(tank)) not in seen:
             seen.add((id(deg), id(tank)))
             pairs.append(Pair(deg, tank))
@@ -133,20 +145,26 @@ def _tile(key, label, unit, last, target, now, pts):
     }
 
 
-def co2_tile(readings, target, now, window):
-    """None without a window. Otherwise a tile; if a reading is missing it has no value, only a message."""
+def co2_tile(readings, target, now, window, events=()):
+    """None without a window. Otherwise a tile; if the rule can't be met it has no value, only a message."""
     if not window or None in window:
         return None
     on, off = window
-    deg, tank = co2_drop_at(readings, on, off, now)
+    deg, tank, wc = co2_drop_at(readings, on, off, now, events)
+    history = co2_series(readings, on, off, events)
     if deg and tank:
         pair = Pair(deg, tank)
-        tile = _tile(CO2_DROP, CO2_DROP_LABEL, 'pH', pair, target, now, co2_series(readings, on, off))
+        tile = _tile(CO2_DROP, CO2_DROP_LABEL, 'pH', pair, target, now, history)
         tile['pairing'] = pair
         return tile
+    if wc:
+        message = 'new degassed sample needed after water change'
+    elif not tank:
+        message = 'no in-window pH'
+    else:
+        message = f'no degassed pH in {CO2_DEGASSED_DAYS} d'
     return {'key': CO2_DROP, 'label': CO2_DROP_LABEL, 'value': None, 'stale': True, 'target': target,
-            'message': 'no in-window pH' if not tank else f'no degassed pH in {CO2_DEGASSED_DAYS} d',
-            'window': window, 'spark': spark(co2_series(readings, on, off), now, target)}
+            'message': message, 'blocking_wc': wc, 'window': window, 'spark': spark(history, now, target)}
 
 
 def bubble_tile(event, now):
@@ -156,16 +174,17 @@ def bubble_tile(event, now):
             'band': None, 'target': None, 'method': event.notes, 'value_min': None, 'value_max': None, 'spark': None}
 
 
-def build_tiles(readings, targets, now, co2_window=None, bubble=None):
+def build_tiles(readings, targets, now, co2_window=None, bubble=None, events=()):
     """readings: all of one tank's readings. targets: {key: (min, max)}. co2_window: (on, off) times or None.
-    bubble: latest bubble-rate event or None. Returns TILE_GROUPS order as a list of non-empty groups.
+    bubble: latest bubble-rate event or None. events: the tank's events (water changes matter).
+    Returns TILE_GROUPS order as a list of non-empty groups.
     Bad readings never count as latest; a suspect latest is shown but flagged."""
     by_param = {}
     for r in sorted(readings, key=lambda r: (r.timestamp, r.id or 0)):
         if r.quality != 'bad' and r.parameter in PARAMETERS:
             by_param.setdefault(r.parameter, []).append(r)
     tiles = {k: _tile(k, *PARAMETERS[k][:2], pts[-1], targets.get(k), now, pts) for k, pts in by_param.items()}
-    co2 = co2_tile(readings, targets.get(CO2_DROP), now, co2_window)
+    co2 = co2_tile(readings, targets.get(CO2_DROP), now, co2_window, events)
     if co2:
         tiles[CO2_DROP] = co2
     if bubble is not None and bubble.value is not None:
@@ -199,7 +218,7 @@ def series(key, readings, events, targets, co2_window=None):
                        'unit': EVENT_TYPES.get(e.event_type, (None, None))[1], 'value': e.value, 'notes': e.notes}
                       for e in sorted(events, key=lambda e: e.timestamp)]}
     if key == CO2_DROP:
-        pairs = co2_series(readings, *co2_window) if co2_window and None not in co2_window else []
+        pairs = co2_series(readings, *co2_window, events) if co2_window and None not in co2_window else []
         out.update(label=CO2_DROP_LABEL, unit='pH', points=[
             {'t': _iso(p.timestamp), 'time_known': True, 'y': p.value, 'min': None, 'max': None,
              'quality': 'ok', 'method': None, 'notes': None,

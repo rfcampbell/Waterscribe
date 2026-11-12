@@ -58,7 +58,8 @@ def index():
     
     targets = targets_for(selected_aquarium.id)
     tile_groups = build_tiles(Reading.query.filter_by(aquarium_id=selected_aquarium.id).all(), targets,
-                              datetime.now(), (selected_aquarium.co2_on, selected_aquarium.co2_off), last_bubble)
+                              datetime.now(), (selected_aquarium.co2_on, selected_aquarium.co2_off), last_bubble,
+                              Event.query.filter_by(aquarium_id=selected_aquarium.id, event_type='water_change').all())
     next_task = next((t for t in upcoming_tasks if t.next_due), upcoming_tasks[0] if upcoming_tasks else None)
 
     resp = make_response(render_template('dashboard/index.html',

@@ -108,6 +108,9 @@ STALE_DAYS = {
 # Can have a target range like a parameter.
 CO2_DROP = 'co2_drop'
 CO2_DROP_LABEL = 'CO2 pH drop'
+# A water change at least this big (%) resets the CO2 drop's degassed reference: KH changes, so a
+# degassed sample from before it no longer applies. A change with no % recorded also counts.
+WC_RESETS_DEGASSED_PCT = 20
 TARGET_KEYS = {**{k: p[0] for k, p in PARAMETERS.items()}, CO2_DROP: CO2_DROP_LABEL}
 TARGET_RANGES = {**RANGES, CO2_DROP: (0, 3)}   # plausibility for target min/max
 

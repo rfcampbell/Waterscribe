@@ -375,7 +375,11 @@
             title="{{ t.label }}: {{ t.message }} (CO2 window {{ t.window[0].strftime('%H:%M') }}–{{ t.window[1].strftime('%H:%M') }})">
         <div class="tile-head"><span class="tile-label">{{ t.label }}</span></div>
         <div class="tile-value tile-message">{{ t.message }}</div>
+        {% if t.blocking_wc %}
+        <div class="tile-sub pairing">{{ '%g' % t.blocking_wc.value ~ '% ' if t.blocking_wc.value is not none }}water change {{ when(t.blocking_wc) }}; latest degassed pH is older</div>
+        {% else %}
         <div class="tile-sub pairing">needs a pH taken {{ t.window[0].strftime('%H:%M') }}–{{ t.window[1].strftime('%H:%M') }} in the last 2 d and a degassed pH in the last 14 d</div>
+        {% endif %}
         {% if t.spark %}{{ spark_svg(t.spark) }}{% endif %}
         {% if t.target %}<div class="tile-target">target {{ fmt_target(t.target) }}</div>{% endif %}
     </button>
