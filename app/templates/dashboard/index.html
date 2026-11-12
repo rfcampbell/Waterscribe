@@ -445,7 +445,7 @@
         <a class="pill{% if a.id == selected_aquarium.id %} active{% endif %}" href="{{ url_for('dashboard.index', aquarium_id=a.id) }}"
            title="{{ a.name }}"{% if a.id == selected_aquarium.id %} aria-current="page"{% endif %}>{{ a.code }}</a>
         {% endfor %}
-        <a class="pill pill-add" href="#" onclick="showCreateAquarium()" title="Add aquarium" aria-label="Add aquarium">+</a>
+        <a class="pill pill-add" href="#" onclick="showCreateAquarium(); return false;" title="Add aquarium" aria-label="Add aquarium">+</a>
     </nav>
     <a href="{{ url_for('dashboard.manage_aquariums') }}" class="btn btn-secondary btn-mini">Manage Aquariums</a>
 </div>
@@ -559,7 +559,7 @@
 
 <!-- Entry drawer -->
 <dialog id="entry-drawer" class="drawer" aria-labelledby="entry-title">
-    <form id="readings-form" onsubmit="submitReadings(event)">
+    <form id="readings-form" data-aquarium-id="{{ selected_aquarium.id }}" autocomplete="off" onsubmit="submitReadings(event)">
         <div class="drawer-head">
             <h2 id="entry-title" tabindex="-1" autofocus>Log readings <span class="tank-sub">{{ selected_aquarium.code }}</span></h2>
             <button type="button" class="drawer-x" onclick="closeEntry()" aria-label="Close (entries are kept)" title="Close (entries are kept)">✕</button>
@@ -781,7 +781,7 @@
 
     // Aquarium switcher
     function switchAquarium(aquariumId) {
-        window.location.href = `{{ url_for('dashboard.index') }}?aquarium_id=${aquariumId}`;
+        if (confirmLeave()) window.location.href = `{{ url_for('dashboard.index') }}?aquarium_id=${aquariumId}`;
     }
 
     // API helper
@@ -807,7 +807,7 @@
             const result = await api(`/api/aquarium/${currentAquariumId}/scheduled`, 'POST', data);
             if (result.success) {
                 event.target.reset();
-                location.reload();
+                if (confirmLeave()) location.reload();
             } else {
                 alert(result.error || 'Failed to save task');
             }
@@ -944,7 +944,7 @@
     async function completeTask(id) {
         try {
             await api(`/api/aquarium/${currentAquariumId}/scheduled`, 'PUT', {id});
-            location.reload();
+            if (confirmLeave()) location.reload();
         } catch (error) {
             alert('Failed to complete task');
         }
@@ -955,7 +955,7 @@
         if (confirm('Delete this scheduled task?')) {
             try {
                 await api(`/api/aquarium/${currentAquariumId}/scheduled?id=${id}`, 'DELETE');
-                location.reload();
+                if (confirmLeave()) location.reload();
             } catch (error) {
                 alert('Failed to delete task');
             }
@@ -965,7 +965,7 @@
 
     // Create aquarium: one form for it, on Manage Aquariums, which asks for the tank code
     function showCreateAquarium() {
-        window.location.href = '{{ url_for("dashboard.manage_aquariums") }}#add';
+        if (confirmLeave()) window.location.href = '{{ url_for("dashboard.manage_aquariums") }}#add';
     }
 
     // ---- Readings & events ----
@@ -1045,7 +1045,7 @@
             <input type="number" step="any" class="form-control r-value" placeholder="Value" aria-label="${esc(PARAMS[param][0])} value">
             <input type="number" step="any" class="form-control r-min" placeholder="Min" aria-label="Range min" title="Optional range, e.g. a colour between two chart values">
             <input type="number" step="any" class="form-control r-max" placeholder="Max" aria-label="Range max">
-            <input type="text" class="form-control r-method" placeholder="Method / kit" aria-label="Method" list="methods-${param}" maxlength="100">
+            <input type="text" class="form-control r-method" placeholder="Method / kit" aria-label="Method" autocomplete="on" list="methods-${param}" maxlength="100">
             <select class="form-control r-quality" aria-label="Quality">${qualityOptions('ok')}</select>
             <input type="text" class="form-control r-notes" placeholder="Note" aria-label="Note">
             ${first
@@ -1087,6 +1087,29 @@
         document.getElementById('entry-drawer').showModal();
     }
     function closeEntry() { document.getElementById('entry-drawer').close(); }
+
+    // A draft belongs to the tank whose page built it: it is never stored, so another tank's page
+    // starts empty, and leaving this page with one asks first.
+    const TANK_CODE = {{ selected_aquarium.code|tojson }};
+    let leaving = false;   // set once a leave is confirmed (or the draft saved), so beforeunload stays quiet
+    function confirmLeave() {
+        const n = pendingCount();
+        if (leaving || !n) return true;
+        leaving = confirm(`${n} unsaved reading${n === 1 ? '' : 's'} for ${TANK_CODE}. Leave and discard ${n === 1 ? 'it' : 'them'}?`);
+        return leaving;
+    }
+    document.addEventListener('click', e => {
+        const a = e.target.closest('a[href]');
+        if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || a.target === '_blank') return;
+        if (a.getAttribute('href').startsWith('#')) return;   // in-page tabs; onclick handlers guard themselves
+        if (!confirmLeave()) e.preventDefault();
+    }, true);
+    window.addEventListener('beforeunload', e => {   // back, close, typed URL (iOS Safari never fires this)
+        if (!leaving && pendingCount()) { e.preventDefault(); e.returnValue = ''; }
+    });
+    window.addEventListener('pageshow', e => {   // back-forward cache: a discarded draft must not come back
+        if (e.persisted && leaving) { leaving = false; resetReadingsForm(); }
+    });
     function toggleGroup(param, collapsed) {
         const group = document.querySelector(`.pgroup[data-param="${param}"]`);
         if (collapsed === undefined) collapsed = !group.classList.contains('collapsed');
@@ -1145,8 +1168,11 @@
             notes: line.querySelector('.r-notes').value,
         })).filter(r => r.value.trim() !== '');
         if (!readings.length) { alert('Enter at least one value'); return; }
-        const result = await api(`/api/aquarium/${currentAquariumId}/readings`, 'POST', { date, time, readings }).catch(() => ({}));
+        const tankId = +event.target.dataset.aquariumId;
+        if (tankId !== currentAquariumId) { alert('This draft belongs to another tank; not saved.'); return; }
+        const result = await api(`/api/aquarium/${tankId}/readings`, 'POST', { date, time, readings }).catch(() => ({}));
         if (result.success) {
+            leaving = true;      // saved: nothing to warn about
             location.reload();   // tiles, chart and log are all server-fed
         } else {
             alert(result.error || 'Failed to save readings');

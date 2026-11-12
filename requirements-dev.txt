@@ -1,0 +1,3 @@
+# Dev/test tooling only -- never installed into the app venv (venv/ is what gunicorn runs).
+# python3 -m venv .venv-dev && .venv-dev/bin/pip install -r requirements-dev.txt && .venv-dev/bin/playwright install chromium
+playwright==1.65.1
