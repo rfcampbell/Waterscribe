@@ -12,6 +12,20 @@ CO2_TANK_DAYS = 2        # in-tank pH (inside the CO2 window) must be this recen
 CO2_DEGASSED_DAYS = 14   # degassed pH reference must be this recent
 
 
+def method_suggestions(rows, aquarium_id):
+    """rows: (aquarium_id, parameter, method), newest first.
+    Returns (shared {param: [methods], newest first, all tanks}, tank {param: this tank's last method})."""
+    shared, tank = {}, {}
+    for aid, param, method in rows:
+        if not method:
+            continue
+        if method not in shared.setdefault(param, []):
+            shared[param].append(method)
+        if aid == aquarium_id:
+            tank.setdefault(param, method)
+    return shared, tank
+
+
 def age_days(ts, now):
     return (now - ts).total_seconds() / 86400
 

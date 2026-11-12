@@ -5,7 +5,8 @@ from datetime import datetime, timedelta, time
 from types import SimpleNamespace
 
 from app.overview import (age_text, is_stale, band_state, build_tiles, spark, in_window,
-                          co2_drop_at, co2_series, series, group_sessions, shared_note, log_days, SESSION_WINDOW)
+                          co2_drop_at, co2_series, series, group_sessions, shared_note, log_days, SESSION_WINDOW,
+                          method_suggestions)
 
 NOW = datetime(2026, 11, 11, 20, 0)
 _ids = iter(range(1, 10_000))
@@ -335,3 +336,30 @@ class Series(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class MethodSuggestions(unittest.TestCase):
+    ROWS = [  # newest first, as the route queries them
+        (2, 'ec', 'Hanna'),
+        (1, 'ec', 'Apera EC20'),
+        (1, 'nitrate', None),
+        (2, 'nitrate', 'Salifert'),
+        (1, 'nitrate', 'API drop'),
+        (1, 'ec', 'Hanna'),
+    ]
+
+    def test_prefill_is_this_tanks_last_not_the_global_newest(self):
+        _, tank = method_suggestions(self.ROWS, 1)
+        self.assertEqual(tank, {'ec': 'Apera EC20', 'nitrate': 'API drop'})
+
+    def test_suggestions_shared_across_tanks_newest_first_deduped(self):
+        shared, _ = method_suggestions(self.ROWS, 1)
+        self.assertEqual(shared, {'ec': ['Hanna', 'Apera EC20'], 'nitrate': ['Salifert', 'API drop']})
+
+    def test_tank_without_history_gets_no_prefill(self):
+        _, tank = method_suggestions(self.ROWS, 9)
+        self.assertEqual(tank, {})
+
+    def test_blank_method_never_masks_an_older_real_one(self):
+        _, tank = method_suggestions([(1, 'kh', ''), (1, 'kh', 'Salifert')], 1)
+        self.assertEqual(tank, {'kh': 'Salifert'})

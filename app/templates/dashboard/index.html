@@ -13,7 +13,31 @@
     .pill.active { background: var(--seafoam); border-color: transparent; color: var(--deep-ocean); }
     .pill-add { opacity: 0.6; padding: 8px 12px; }
     .btn-mini { padding: 7px 12px; font-size: 0.8rem; white-space: nowrap; flex-shrink: 0; }
-    .tank-head { margin-bottom: 14px; }
+    .tank-head { margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+    .tank-id { min-width: 0; }
+    .log-btn { white-space: nowrap; flex-shrink: 0; }
+    .log-btn .pending-n { font-weight: 400; opacity: 0.85; }
+    /* Entry drawer: side sheet on desktop, full screen on phones */
+    dialog.drawer {
+        position: fixed; inset: 0 0 0 auto; margin: 0; padding: 0; border: 0;
+        width: min(960px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh;
+        background: var(--deep-ocean); color: var(--pearl); border-left: 1px solid rgba(240, 244, 248, 0.12);
+    }
+    dialog.drawer[open] { display: flex; flex-direction: column; animation: drawer-in 0.18s ease-out; }
+    dialog.drawer::backdrop { background: rgba(5, 10, 20, 0.6); }
+    @keyframes drawer-in { from { transform: translateX(32px); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { dialog.drawer[open] { animation: none; } }
+    body:has(dialog.drawer[open]) { overflow: hidden; }
+    #readings-form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    .drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: max(14px, env(safe-area-inset-top)) 18px 14px; border-bottom: 1px solid rgba(240, 244, 248, 0.1); }
+    .drawer-head h2 { font-size: 1.15rem; font-weight: 600; outline: none; }
+    .drawer-x { background: none; border: 0; color: var(--pearl); font-size: 1.3rem; line-height: 1; padding: 8px 10px; cursor: pointer; opacity: 0.8; }
+    .drawer-x:hover { opacity: 1; }
+    .drawer-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 16px 18px; }
+    .drawer-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+        padding: 12px 18px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid rgba(240, 244, 248, 0.1); background: var(--mid-ocean); }
+    .drawer-foot .hint { margin-right: auto; }
     .tank-title { font-size: 1.5rem; font-weight: 600; line-height: 1.2; }
     .tank-sub { font-size: 0.9rem; font-weight: 400; opacity: 0.6; margin-left: 6px; }
     .tank-meta-line { font-size: 0.88rem; margin-top: 4px; opacity: 0.8; }
@@ -427,6 +451,7 @@
 </div>
 
 <div class="tank-head">
+  <div class="tank-id">
     <h1 class="tank-title">{{ selected_aquarium.name }}
         <span class="tank-sub">{{ selected_aquarium.code }}{% if selected_aquarium.volume_gallons %} · {{ '%g' % selected_aquarium.volume_gallons }} gal{% endif %}{% if selected_aquarium.type %} · {{ selected_aquarium.type }}{% endif %}</span>
     </h1>
@@ -435,6 +460,8 @@
         <span class="sep">·</span>
         <a href="#schedule" onclick="navigateTab('schedule'); return false;">{% if next_task %}{{ upcoming_tasks|length }} task{{ '' if upcoming_tasks|length == 1 else 's' }} · next: {{ next_task.task_name }}{% if next_task.next_due %} {{ next_task.next_due.strftime('%b %-d') }}{% endif %}{% else %}no tasks{% endif %}</a>
     </div>
+  </div>
+    <button type="button" class="btn btn-primary log-btn" id="log-btn" onclick="openEntry()" aria-haspopup="dialog">+ Log readings<span class="pending-n" id="log-btn-n"></span></button>
 </div>
 
 <!-- Parameter tiles -->
@@ -523,8 +550,21 @@
 <!-- Parameters Tab -->
 <div id="tab-parameters" class="tab-content active">
     <div class="section">
-        <h2 class="section-title">Water Parameters</h2>
-        <form id="readings-form" onsubmit="submitReadings(event)">
+        <h2 class="section-title log-title" style="margin-top:0">Log</h2>
+        <div id="log-chips" class="chips" role="group" aria-label="Filter by parameter"></div>
+        <div class="lhead" aria-hidden="true"><span>Time</span><span>Parameter</span><span class="c-val">Value</span><span>Range</span><span>Unit</span><span>Method</span><span>Quality</span><span>Note</span><span></span></div>
+        <div id="readings-log" class="log-container"><p class="empty-note">Loading…</p></div>
+    </div>
+</div>
+
+<!-- Entry drawer -->
+<dialog id="entry-drawer" class="drawer" aria-labelledby="entry-title">
+    <form id="readings-form" onsubmit="submitReadings(event)">
+        <div class="drawer-head">
+            <h2 id="entry-title" tabindex="-1" autofocus>Log readings <span class="tank-sub">{{ selected_aquarium.code }}</span></h2>
+            <button type="button" class="drawer-x" onclick="closeEntry()" aria-label="Close (entries are kept)" title="Close (entries are kept)">✕</button>
+        </div>
+        <div class="drawer-body">
             <div class="when-row">
                 <div class="form-group">
                     <label class="form-label" for="readings-date">Date</label>
@@ -544,17 +584,14 @@
                 <span class="pg-line-head"><span>Value</span><span>Min</span><span>Max</span><span>Method / kit</span><span>Quality</span><span>Note</span><span></span></span>
             </div>
             <div id="reading-grid"></div>
-            <div class="form-buttons">
-                <button type="submit" class="btn btn-primary">Save Readings</button>
-            </div>
-        </form>
-
-        <h2 class="section-title log-title">Log</h2>
-        <div id="log-chips" class="chips" role="group" aria-label="Filter by parameter"></div>
-        <div class="lhead" aria-hidden="true"><span>Time</span><span>Parameter</span><span class="c-val">Value</span><span>Range</span><span>Unit</span><span>Method</span><span>Quality</span><span>Note</span><span></span></div>
-        <div id="readings-log" class="log-container"><p class="empty-note">Loading…</p></div>
-    </div>
-</div>
+        </div>
+        <div class="drawer-foot">
+            <span class="hint" id="entry-pending"></span>
+            <button type="button" class="btn btn-secondary" onclick="closeEntry()">Close</button>
+            <button type="submit" class="btn btn-primary">Save Readings</button>
+        </div>
+    </form>
+</dialog>
 
 <!-- Charts Tab -->
 <div id="tab-charts" class="tab-content">
@@ -937,7 +974,8 @@
     // tojson sorts object keys, so catalog order travels separately
     const PARAM_ORDER = {{ parameters.keys()|list|tojson }};
     const EVENT_ORDER = {{ event_types.keys()|list|tojson }};
-    const METHODS = {{ methods|tojson }};            // key: [method, ...] newest first
+    const METHODS = {{ methods|tojson }};            // key: [method, ...] newest first, all tanks (suggestions)
+    const TANK_METHODS = {{ tank_methods|tojson }};  // key: this tank's last method (pre-fill)
     const LATEST = {{ latest_json|tojson }};         // key: newest non-bad reading for this tank
     const QUALITIES = {{ qualities|tojson }};
     const LAST_BUBBLE = {{ (last_bubble.value if last_bubble else none)|tojson }};
@@ -1014,7 +1052,7 @@
                 ? `<button type="button" class="btn btn-small btn-secondary pg-btn" onclick="addLine('${param}')" title="Another ${esc(PARAMS[param][0])} reading at the same time" aria-label="Add another reading">+</button>`
                 : `<button type="button" class="btn btn-small btn-danger pg-btn" onclick="removeLine(this)" aria-label="Remove this reading">✕</button>`}`;
         const method = line.querySelector('.r-method');
-        method.value = (METHODS[param] || [])[0] || '';
+        method.value = TANK_METHODS[param] || (METHODS[param] || [])[0] || '';
         line.querySelector('.r-value').addEventListener('input', () => markPending(param));
         return line;
     }
@@ -1034,7 +1072,21 @@
         const group = document.querySelector(`.pgroup[data-param="${param}"]`);
         const n = [...group.querySelectorAll('.r-value')].filter(i => i.value.trim() !== '').length;
         group.querySelector('.pg-pending').textContent = n ? `${n} to save` : '';
+        showPendingCount();
     }
+    const pendingCount = () => [...document.querySelectorAll('#reading-grid .r-value')].filter(i => i.value.trim() !== '').length;
+    function showPendingCount() {
+        const n = pendingCount();
+        document.getElementById('entry-pending').textContent = n ? `${n} reading${n === 1 ? '' : 's'} to save` : '';
+        document.getElementById('log-btn-n').textContent = n ? ` · ${n} unsaved` : '';
+    }
+
+    // Entry drawer: opening with nothing typed starts fresh at the current time; closing keeps what's typed
+    function openEntry() {
+        if (!pendingCount()) resetReadingsForm();
+        document.getElementById('entry-drawer').showModal();
+    }
+    function closeEntry() { document.getElementById('entry-drawer').close(); }
     function toggleGroup(param, collapsed) {
         const group = document.querySelector(`.pgroup[data-param="${param}"]`);
         if (collapsed === undefined) collapsed = !group.classList.contains('collapsed');
@@ -1076,6 +1128,7 @@
         document.getElementById('readings-date').value = todayStr();
         document.getElementById('readings-time').value = nowTime();
         buildReadingGrid();
+        showPendingCount();
     }
 
     async function submitReadings(event) {
@@ -1094,18 +1147,7 @@
         if (!readings.length) { alert('Enter at least one value'); return; }
         const result = await api(`/api/aquarium/${currentAquariumId}/readings`, 'POST', { date, time, readings }).catch(() => ({}));
         if (result.success) {
-            readings.forEach(r => {
-                if (r.method && !(METHODS[r.parameter] || []).includes(r.method))
-                    METHODS[r.parameter] = [r.method, ...(METHODS[r.parameter] || [])];
-                else if (r.method)   // most recent method first, so it pre-fills next time
-                    METHODS[r.parameter] = [r.method, ...METHODS[r.parameter].filter(m => m !== r.method)];
-                const ts = `${date}T${time || '12:00'}`;
-                if (r.quality !== 'bad' && (!LATEST[r.parameter] || ts >= LATEST[r.parameter].timestamp))
-                    LATEST[r.parameter] = { value: +r.value, quality: r.quality, timestamp: ts };
-            });
-            document.getElementById('method-lists').innerHTML = methodDatalists();
-            resetReadingsForm();
-            loadReadings();
+            location.reload();   // tiles, chart and log are all server-fed
         } else {
             alert(result.error || 'Failed to save readings');
         }
@@ -1456,6 +1498,8 @@
         lists.id = 'method-lists';
         lists.innerHTML = methodDatalists();
         document.body.appendChild(lists);
+        const drawer = document.getElementById('entry-drawer');
+        drawer.addEventListener('click', e => { if (e.target === drawer) closeEntry(); });   // backdrop
         MainChart.init(currentAquariumId);
         const first = initialTile();
         if (first) selectTile(first, false);

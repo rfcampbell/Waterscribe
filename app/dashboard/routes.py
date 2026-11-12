@@ -10,7 +10,7 @@ from app.dashboard import bp
 from app.models import db, Aquarium, Reading, Event, ScheduledTask, FishInventory
 from app.catalog import PARAMETERS, EVENT_TYPES, QUALITIES, TARGET_KEYS, TARGET_RANGES
 from app.api.routes import latest_readings
-from app.overview import build_tiles, fmt_target
+from app.overview import build_tiles, fmt_target, method_suggestions
 from app.targets import save_targets, targets_for
 
 TANK_COOKIE = 'ws_tank'
@@ -34,13 +34,10 @@ def index():
     selected_aquarium = next((a for a in aquariums if a.id == selected_id), aquariums[0])
     
     latest = latest_readings(selected_aquarium.id)
-    # Methods used before, newest first per parameter -- the entry form suggests and pre-fills them
-    methods = {}
-    for param, method in db.session.query(Reading.parameter, Reading.method).filter(
-            Reading.method.isnot(None)).order_by(Reading.timestamp.desc()):
-        methods.setdefault(param, [])
-        if method not in methods[param]:
-            methods[param].append(method)
+    # Entry form: suggest methods from every tank, pre-fill each parameter with this tank's last one
+    methods, tank_methods = method_suggestions(db.session.query(
+        Reading.aquarium_id, Reading.parameter, Reading.method).filter(Reading.method.isnot(None)).order_by(
+        Reading.timestamp.desc(), Reading.id.desc()), selected_aquarium.id)
     last_bubble = Event.query.filter_by(aquarium_id=selected_aquarium.id, event_type='co2_bubble_rate'
                                         ).filter(Event.value.isnot(None)).order_by(Event.timestamp.desc()).first()
     
@@ -69,6 +66,7 @@ def index():
                          latest_json={k: r.to_dict() for k, r in latest.items()},
                          last_bubble=last_bubble,
                          methods=methods,
+                         tank_methods=tank_methods,
                          parameters=PARAMETERS,
                          event_types=EVENT_TYPES,
                          qualities=QUALITIES,
