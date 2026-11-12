@@ -2,69 +2,62 @@
 
 {% block extra_css %}
 <style>
-    .aquarium-selector {
-        background: rgba(240, 244, 248, 0.05);
-        backdrop-filter: blur(10px);
-        padding: 20px;
-        border-radius: 16px;
-        border: 1px solid rgba(240, 244, 248, 0.1);
-        margin-bottom: 30px;
-        display: flex;
-        align-items: center;
-        gap: 20px;
-        flex-wrap: wrap;
+    .tank-bar { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+    .tank-pills { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; }
+    .pill {
+        flex-shrink: 0; padding: 8px 14px; border-radius: 999px; text-decoration: none; color: var(--pearl);
+        font-family: 'Space Mono', monospace; font-size: 0.9rem; font-weight: 700;
+        background: rgba(240, 244, 248, 0.05); border: 1px solid rgba(240, 244, 248, 0.14);
     }
+    .pill:hover { background: rgba(240, 244, 248, 0.1); }
+    .pill.active { background: var(--seafoam); border-color: transparent; color: var(--deep-ocean); }
+    .pill-add { opacity: 0.6; padding: 8px 12px; }
+    .btn-mini { padding: 7px 12px; font-size: 0.8rem; white-space: nowrap; flex-shrink: 0; }
+    .tank-head { margin-bottom: 14px; }
+    .tank-title { font-size: 1.5rem; font-weight: 600; line-height: 1.2; }
+    .tank-sub { font-size: 0.9rem; font-weight: 400; opacity: 0.6; margin-left: 6px; }
+    .tank-meta-line { font-size: 0.88rem; margin-top: 4px; opacity: 0.8; }
+    .tank-meta-line a { color: var(--pearl); text-decoration: none; border-bottom: 1px dotted rgba(240, 244, 248, 0.4); }
+    .tank-meta-line .sep { opacity: 0.5; margin: 0 4px; }
 
-    .aquarium-select {
-        flex: 1;
-        min-width: 200px;
+    .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 24px; }
+    .tile {
+        display: flex; flex-direction: column; gap: 3px; text-align: left; min-width: 0;
+        padding: 10px 12px 8px; border-radius: 12px; cursor: pointer; font: inherit; color: var(--pearl);
+        background: rgba(240, 244, 248, 0.05); border: 1px solid rgba(240, 244, 248, 0.1);
+        transition: border-color 0.15s ease, background 0.15s ease;
     }
+    .tile:hover { background: rgba(240, 244, 248, 0.08); }
+    .tile.selected { border-color: var(--seafoam); box-shadow: 0 0 0 1px var(--seafoam) inset; }
+    .tile-head { display: flex; justify-content: space-between; gap: 6px; font-size: 0.76rem; }
+    .tile-label { opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tile-age { opacity: 0.6; white-space: nowrap; }
+    .tile-sub.pairing { white-space: normal; line-height: 1.3; }
+    .tile-value { font-size: 1.6rem; font-weight: 700; line-height: 1.1; color: var(--pearl); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tile.band-in .tile-value { color: var(--seafoam); }
+    .tile.band-out .tile-value { color: var(--coral); }
+    .tile-unit { font-size: 0.75rem; font-weight: 400; opacity: 0.65; margin-left: 4px; }
+    .tile-range { font-size: 0.75rem; font-weight: 400; opacity: 0.6; margin-left: 4px; }
+    .tile-suspect { font-size: 0.85rem; color: var(--sand); margin-left: 5px; vertical-align: 4px; }
+    .tile-sub { font-size: 0.72rem; opacity: 0.55; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1em; }
+    .tile-target { font-size: 0.68rem; opacity: 0.55; }
+    .tile.stale { opacity: 0.55; }
+    .tile.stale .tile-age { color: var(--sand); opacity: 1; }
+    .spark { display: block; width: 100%; height: 30px; margin-top: 2px; overflow: visible; }
+    .spark-empty { font-size: 0.68rem; opacity: 0.4; line-height: 30px; }
+    .spark-band { fill: rgba(78, 205, 196, 0.14); }
+    .spark-line { fill: none; stroke: rgba(240, 244, 248, 0.55); stroke-width: 1.5; }
+    .spark-dot { stroke: var(--pearl); stroke-width: 4; stroke-linecap: round; }
+    .spark-dot.suspect { stroke: var(--sand); }
 
-    .dashboard {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 20px;
-        margin-bottom: 40px;
-    }
-
-    .stat-card {
-        background: rgba(240, 244, 248, 0.05);
-        backdrop-filter: blur(10px);
-        padding: 25px;
-        border-radius: 16px;
-        border: 1px solid rgba(240, 244, 248, 0.1);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        animation: fadeIn 0.5s ease;
-    }
-
-    .stat-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 40px rgba(78, 205, 196, 0.1);
-    }
-
-    .stat-card.clickable {
-        cursor: pointer;
-    }
-
-    .stat-label {
-        color: rgba(240, 244, 248, 0.7);
-        font-size: 0.9rem;
-        margin-bottom: 10px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-
-    .stat-value {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: var(--seafoam);
-        line-height: 1;
-    }
-
-    .stat-unit {
-        font-size: 1rem;
-        color: var(--pearl);
-        opacity: 0.7;
+    @media (max-width: 520px) {
+        .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .tile-value { font-size: 1.4rem; }
+        .tank-title { font-size: 1.25rem; }
+        .btn-mini { padding: 7px 10px; }
+        .tank-bar { flex-direction: column-reverse; gap: 10px; }
+        .tank-bar .btn-mini { align-self: flex-end; margin-bottom: -4px; }
+        .pill { padding: 7px 12px; font-size: 0.85rem; }
     }
 
     .tabs {
@@ -198,7 +191,6 @@
         color: white;
     }
 
-    .stat-asof { margin-top: 8px; font-size: 0.8rem; opacity: 0.6; }
     .hint { font-weight: 400; opacity: 0.6; font-size: 0.85em; }
     .when-row { display: grid; grid-template-columns: repeat(2, minmax(0, 220px)); gap: 15px; margin-bottom: 15px; }
     .grid-tools { display: flex; justify-content: flex-end; gap: 14px; margin-bottom: 6px; }
@@ -294,54 +286,62 @@
 {% endblock %}
 
 {% block content %}
-<!-- Aquarium Selector -->
-<div class="aquarium-selector">
-    <div style="flex: 1; min-width: 200px;">
-        <label class="form-label" for="aquarium-select">Select Aquarium:</label>
-        <select id="aquarium-select" class="form-control" onchange="switchAquarium(this.value)">
-            {% for aquarium in aquariums %}
-                <option value="{{ aquarium.id }}" {% if aquarium.id == selected_aquarium.id %}selected{% endif %}>
-                    {{ aquarium.name }}{% if aquarium.volume_gallons %} ({{ aquarium.volume_gallons }}gal){% endif %}
-                </option>
-            {% endfor %}
-        </select>
-    </div>
-    <a href="#" onclick="showCreateAquarium()" class="btn btn-primary">+ Add Aquarium</a>
-    <a href="{{ url_for('dashboard.manage_aquariums') }}" class="btn btn-secondary">Manage Aquariums</a>
+<!-- Tank switcher -->
+<div class="tank-bar">
+    <nav class="tank-pills" aria-label="Tanks">
+        {% for a in aquariums %}
+        <a class="pill{% if a.id == selected_aquarium.id %} active{% endif %}" href="{{ url_for('dashboard.index', aquarium_id=a.id) }}"
+           title="{{ a.name }}"{% if a.id == selected_aquarium.id %} aria-current="page"{% endif %}>{{ a.code }}</a>
+        {% endfor %}
+        <a class="pill pill-add" href="#" onclick="showCreateAquarium()" title="Add aquarium" aria-label="Add aquarium">+</a>
+    </nav>
+    <a href="{{ url_for('dashboard.manage_aquariums') }}" class="btn btn-secondary btn-mini">Manage Aquariums</a>
 </div>
 
-<!-- Dashboard Stats -->
-{% set card_keys = [] %}
-{% for k in ['ph', 'ec', 'nitrate', 'temperature', 'kh'] %}{% if k in latest and card_keys|length < 3 %}{% set _ = card_keys.append(k) %}{% endif %}{% endfor %}
-{% if not card_keys %}{% set _ = card_keys.append('ph') %}{% endif %}
-<div class="dashboard" id="dashboard">
-    {% for k in card_keys %}
-    {% set r = latest.get(k) %}
-    <div class="stat-card clickable" onclick="navigateTab('charts')">
-        <div class="stat-label">{{ parameters[k][0] }}</div>
-        <div class="stat-value">
-            {{ '%g' % r.value if r else '--' }}
-            {% if parameters[k][1] != 'pH' %}<span class="stat-unit">{{ parameters[k][1] }}</span>{% endif %}
-            {% if r and r.quality == 'suspect' %}<span class="stat-unit" title="Flagged suspect">⚠</span>{% endif %}
-        </div>
-        {% if r %}<div class="stat-asof">{{ r.timestamp.strftime('%b %d' + (' %H:%M' if r.time_known else '')) }}</div>{% endif %}
+<div class="tank-head">
+    <h1 class="tank-title">{{ selected_aquarium.name }}
+        <span class="tank-sub">{{ selected_aquarium.code }}{% if selected_aquarium.volume_gallons %} · {{ '%g' % selected_aquarium.volume_gallons }} gal{% endif %}{% if selected_aquarium.type %} · {{ selected_aquarium.type }}{% endif %}</span>
+    </h1>
+    <div class="tank-meta-line">
+        <a href="#fish" onclick="navigateTab('fish'); return false;">{{ fish_held }} fish{% if fish_planned %} · {{ fish_planned }} planned{% endif %}</a>
+        <span class="sep">·</span>
+        <a href="#schedule" onclick="navigateTab('schedule'); return false;">{% if next_task %}{{ upcoming_tasks|length }} task{{ '' if upcoming_tasks|length == 1 else 's' }} · next: {{ next_task.task_name }}{% if next_task.next_due %} {{ next_task.next_due.strftime('%b %-d') }}{% endif %}{% else %}no tasks{% endif %}</a>
     </div>
+</div>
+
+<!-- Parameter tiles -->
+{% macro spark_svg(sp) -%}
+<svg class="spark" viewBox="0 0 {{ sp.w }} {{ sp.h }}" preserveAspectRatio="none" aria-hidden="true">
+    {% if sp.band %}<rect class="spark-band" x="0" y="{{ sp.band.y }}" width="{{ sp.w }}" height="{{ sp.band.h }}"/>{% endif %}
+    <polyline class="spark-line" points="{{ sp.line }}" vector-effect="non-scaling-stroke"/>
+    {% for d in sp.dots %}<path class="spark-dot{% if d.suspect %} suspect{% endif %}" d="M{{ d.x }} {{ d.y }}h0" vector-effect="non-scaling-stroke"/>{% endfor %}
+</svg>
+{%- endmacro %}
+{% macro hm(r) %}{{ r.timestamp.strftime('%H:%M') if r.time_known else r.timestamp.strftime('%b %-d') }}{% endmacro %}
+<div class="tiles" id="tiles">
+    {% for t in tiles %}
+    <button type="button" class="tile{% if t.stale %} stale{% endif %}{% if t.band %} band-{{ t.band }}{% endif %}" data-key="{{ t.key }}" onclick="selectTile('{{ t.key }}')"
+            title="{{ t.label }}: {{ t.timestamp.strftime('%Y-%m-%d' + (' %H:%M' if t.time_known else ' (time unknown)')) }}{% if t.stale %} — stale{% endif %}{% if t.suspect %} — flagged suspect{% endif %}">
+        <div class="tile-head"><span class="tile-label">{{ t.label }}</span><span class="tile-age">{{ t.age }}</span></div>
+        <div class="tile-value">{{ '%g' % t.value }}{% if t.unit %}<span class="tile-unit">{{ t.unit }}</span>{% endif %}{% if t.suspect %}<span class="tile-suspect" aria-label="suspect">⚠</span>{% endif %}
+            {% if t.value_min is not none or t.value_max is not none %}<span class="tile-range">({{ '%g' % t.value_min if t.value_min is not none else '' }}–{{ '%g' % t.value_max if t.value_max is not none else '' }})</span>{% endif %}</div>
+        {% if t.key == 'co2_drop' %}
+        <div class="tile-sub pairing">{{ '%g' % t.pairing.degassed.value }} degassed {{ hm(t.pairing.degassed) }} − {{ '%g' % t.pairing.tank.value }} in tank {{ hm(t.pairing.tank) }}</div>
+        {% else %}
+        <div class="tile-sub">{{ t.method or ' ' }}</div>
+        {% endif %}
+        {% if t.spark %}{{ spark_svg(t.spark) }}{% else %}<div class="spark spark-empty">nothing in 30 d</div>{% endif %}
+        {% if t.target %}<div class="tile-target">target {{ fmt_target(t.target) }}</div>{% endif %}
+    </button>
     {% endfor %}
     {% if last_bubble %}
-    <div class="stat-card clickable" onclick="navigateTab('events')">
-        <div class="stat-label">CO2 Bubble Rate</div>
-        <div class="stat-value">{{ '%g' % last_bubble.value }} <span class="stat-unit">/30s</span></div>
-        <div class="stat-asof">since {{ last_bubble.timestamp.strftime('%b %d') }}</div>
-    </div>
+    <button type="button" class="tile" data-key="co2_bubble_rate" onclick="selectTile('co2_bubble_rate')" title="CO2 bubble rate setting">
+        <div class="tile-head"><span class="tile-label">CO2 bubble rate</span><span class="tile-age">set {{ last_bubble_age }}</span></div>
+        <div class="tile-value">{{ '%g' % last_bubble.value }}<span class="tile-unit">/30s</span></div>
+        <div class="tile-sub">{{ last_bubble.notes or ' ' }}</div>
+    </button>
     {% endif %}
-    <div class="stat-card clickable" onclick="navigateTab('fish')">
-        <div class="stat-label">Total Fish</div>
-        <div class="stat-value" style="font-size: 1.8rem;">{{ fish_held }} <span class="stat-unit">held</span> / {{ fish_planned }} <span class="stat-unit">planned</span></div>
-    </div>
-    <div class="stat-card clickable" onclick="navigateTab('schedule')">
-        <div class="stat-label">Upcoming Tasks</div>
-        <div class="stat-value">{{ upcoming_tasks|length }}</div>
-    </div>
+    {% if not tiles and not last_bubble %}<p class="empty-note">No readings for this tank yet.</p>{% endif %}
 </div>
 
 <!-- Tabs -->
@@ -561,6 +561,19 @@
         showTab(tabName);
         // Scroll tabs into view
         document.querySelector('.tabs').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Tile selection (drives the main chart); remembered per tank in this browser
+    const SEL_KEY = `ws_sel_${currentAquariumId}`;
+    function store(fn) { try { return fn(); } catch (e) { return null; } }
+    function selectTile(key) {
+        document.querySelectorAll('.tile').forEach(t => t.classList.toggle('selected', t.dataset.key === key));
+        store(() => localStorage.setItem(SEL_KEY, key));
+    }
+    function initialTile() {
+        const keys = [...document.querySelectorAll('.tile')].map(t => t.dataset.key);
+        const saved = store(() => localStorage.getItem(SEL_KEY));
+        return [saved, 'ec', 'nitrate'].find(k => keys.includes(k)) || keys[0];
     }
 
     // Aquarium switcher
@@ -1196,6 +1209,8 @@
         lists.id = 'method-lists';
         lists.innerHTML = methodDatalists();
         document.body.appendChild(lists);
+        const first = initialTile();
+        if (first) selectTile(first);
         resetReadingsForm();
         resetEventForm();
         loadReadings();

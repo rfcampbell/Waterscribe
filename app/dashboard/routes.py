@@ -2,33 +2,36 @@
 Dashboard routes - main UI and aquarium management
 """
 import re
+from datetime import datetime
 from app.utils import parse_number
-from flask import render_template, redirect, url_for, flash, request, jsonify
+from flask import render_template, redirect, url_for, flash, request, jsonify, make_response
 
 from app.dashboard import bp
 from app.models import db, Aquarium, Reading, Event, ScheduledTask, FishInventory
-from app.catalog import PARAMETERS, EVENT_TYPES, QUALITIES
+from app.catalog import PARAMETERS, EVENT_TYPES, QUALITIES, TARGET_KEYS, TARGET_RANGES
 from app.api.routes import latest_readings
+from app.overview import build_tiles, fmt_target
+from app.targets import save_targets, targets_for
+
+TANK_COOKIE = 'ws_tank'
+
+def ordered_aquariums():
+    return Aquarium.query.order_by(Aquarium.sort_order, Aquarium.code).all()
 
 @bp.route('/')
 def index():
     """Main dashboard - shows aquarium selector and dashboard"""
     # Get user's aquariums
-    aquariums = Aquarium.query.order_by(Aquarium.name).all()
+    aquariums = ordered_aquariums()
     
     # If no aquariums, send them to the manage page to add one
     if not aquariums:
         flash('Welcome! Let\'s set up your first aquarium.', 'info')
         return redirect(url_for('dashboard.manage_aquariums'))
     
-    # Get the selected aquarium (default to first one)
-    selected_id = request.args.get('aquarium_id', type=int)
-    if selected_id:
-        selected_aquarium = db.session.get(Aquarium, selected_id)
-        if not selected_aquarium:
-            selected_aquarium = aquariums[0]
-    else:
-        selected_aquarium = aquariums[0]
+    # Selected tank: ?aquarium_id=, else the last one picked (cookie), else the first
+    selected_id = request.args.get('aquarium_id', type=int) or request.cookies.get(TANK_COOKIE, type=int)
+    selected_aquarium = next((a for a in aquariums if a.id == selected_id), aquariums[0])
     
     latest = latest_readings(selected_aquarium.id)
     # Methods used before, newest first per parameter -- the entry form suggests and pre-fills them
@@ -53,7 +56,17 @@ def index():
         aquarium_id=selected_aquarium.id
     ).scalar() or 0
     
-    return render_template('dashboard/index.html',
+    targets = targets_for(selected_aquarium.id)
+    tiles = build_tiles(Reading.query.filter_by(aquarium_id=selected_aquarium.id).all(), targets,
+                        datetime.now())
+    if last_bubble:
+        from app.overview import age_text
+        last_bubble_age = age_text(last_bubble.timestamp, last_bubble.time_known, datetime.now())
+    else:
+        last_bubble_age = None
+    next_task = next((t for t in upcoming_tasks if t.next_due), upcoming_tasks[0] if upcoming_tasks else None)
+
+    resp = make_response(render_template('dashboard/index.html',
                          aquariums=aquariums,
                          selected_aquarium=selected_aquarium,
                          latest=latest,
@@ -65,7 +78,13 @@ def index():
                          qualities=QUALITIES,
                          upcoming_tasks=upcoming_tasks,
                          fish_held=fish_held,
-                         fish_planned=fish_planned)
+                         fish_planned=fish_planned,
+                         tiles=tiles,
+                         fmt_target=fmt_target,
+                         last_bubble_age=last_bubble_age,
+                         next_task=next_task))
+    resp.set_cookie(TANK_COOKIE, str(selected_aquarium.id), max_age=365 * 86400, samesite='Lax')
+    return resp
 
 @bp.route('/aquarium/<int:aquarium_id>')
 def aquarium_detail(aquarium_id):
@@ -120,7 +139,9 @@ def create_aquarium():
         except ValueError as e:
             return _bad(str(e))
         
+        last = db.session.query(db.func.max(Aquarium.sort_order)).scalar() or 0
         aquarium = Aquarium(
+            sort_order=last + 1,
             name=name,
             code=code,
             type=(data.get('type') or '').strip() or None,
@@ -150,7 +171,7 @@ def create_aquarium():
 @bp.route('/aquariums')
 def manage_aquariums():
     """List all aquariums with edit/delete"""
-    aquariums = Aquarium.query.order_by(Aquarium.name).all()
+    aquariums = ordered_aquariums()
     counts = {}
     for a in aquariums:
         counts[a.id] = {
@@ -159,8 +180,10 @@ def manage_aquariums():
             'tasks': ScheduledTask.query.filter_by(aquarium_id=a.id).count(),
             'fish': FishInventory.query.filter_by(aquarium_id=a.id).count(),
         }
+    targets = {a.id: targets_for(a.id) for a in aquariums}
     return render_template('dashboard/manage.html', title='Manage Aquariums',
-                           aquariums=aquariums, counts=counts)
+                           aquariums=aquariums, counts=counts, targets=targets,
+                           target_keys=TARGET_KEYS, target_ranges=TARGET_RANGES, fmt_target=fmt_target)
 
 @bp.route('/aquarium/<int:aquarium_id>/edit', methods=['POST'])
 def edit_aquarium(aquarium_id):
@@ -194,6 +217,11 @@ def edit_aquarium(aquarium_id):
             return redirect(url_for('dashboard.manage_aquariums'))
     if 'description' in data:
         aquarium.description = (data.get('description') or '').strip() or None
+    if 'sort_order' in data:
+        try:
+            aquarium.sort_order = parse_number(data.get('sort_order'), cast=int, default=aquarium.sort_order)
+        except ValueError:
+            return _bad('Order must be a whole number')
     
     try:
         db.session.commit()
@@ -234,3 +262,27 @@ def delete_aquarium(aquarium_id):
         else:
             flash('Failed to delete aquarium.', 'danger')
             return redirect(url_for('dashboard.manage_aquariums'))
+
+@bp.route('/aquarium/<int:aquarium_id>/targets', methods=['POST'])
+def edit_targets(aquarium_id):
+    """Save target ranges. JSON: {"targets": {key: {"min": .., "max": ..}}}; form: min_<key>, max_<key>.
+    Keys left out are unchanged; both ends blank removes a target. All-or-nothing."""
+    aquarium = db.get_or_404(Aquarium, aquarium_id)
+    if request.is_json:
+        raw = (request.get_json(silent=True) or {}).get('targets')
+        if not isinstance(raw, dict) or not all(isinstance(v, dict) for v in raw.values()):
+            return _bad('targets must be an object of {min, max}')
+        data = {k: (v.get('min'), v.get('max')) for k, v in raw.items()}
+    else:
+        keys = {f[4:] for f in request.form if f[:4] in ('min_', 'max_')}
+        data = {k: (request.form.get('min_' + k), request.form.get('max_' + k)) for k in keys}
+    try:
+        save_targets(aquarium, data)
+    except ValueError as e:
+        db.session.rollback()
+        return _bad(f'{aquarium.code}: {e}')
+    if request.is_json:
+        return jsonify({'success': True, 'targets': {k: {'min': lo, 'max': hi}
+                                                     for k, (lo, hi) in targets_for(aquarium.id).items()}})
+    flash(f'Targets for {aquarium.code} saved.', 'success')
+    return redirect(url_for('dashboard.manage_aquariums') + f'#tank-{aquarium.id}')

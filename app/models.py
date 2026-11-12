@@ -17,6 +17,7 @@ class Aquarium(db.Model):
     type = db.Column(db.String(50))  # freshwater, saltwater, reef, etc.
     volume_gallons = db.Column(db.Float)
     description = db.Column(db.Text)
+    sort_order = db.Column(db.Integer, nullable=False, default=0, server_default='0')  # tank switcher order
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships
@@ -24,6 +25,7 @@ class Aquarium(db.Model):
     events = db.relationship('Event', backref='aquarium', lazy=True, cascade='all, delete-orphan')
     scheduled_tasks = db.relationship('ScheduledTask', backref='aquarium', lazy=True, cascade='all, delete-orphan')
     fish_inventory = db.relationship('FishInventory', backref='aquarium', lazy=True, cascade='all, delete-orphan')
+    targets = db.relationship('TargetRange', backref='aquarium', lazy=True, cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<Aquarium {self.name}>'
@@ -77,6 +79,24 @@ class Event(db.Model):
 
     def __repr__(self):
         return f'<Event {self.event_type} (Aquarium: {self.aquarium_id})>'
+
+class TargetRange(db.Model):
+    """Target band for one parameter (or catalog.CO2_DROP) of one tank. Either end may be open."""
+    __tablename__ = 'target_ranges'
+    __table_args__ = (
+        db.UniqueConstraint('aquarium_id', 'parameter', name='uq_target_ranges_tank_param'),
+        db.CheckConstraint('min IS NULL OR max IS NULL OR min <= max', name='ck_target_ranges_order'),
+        db.CheckConstraint('min IS NOT NULL OR max IS NOT NULL', name='ck_target_ranges_not_empty'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    aquarium_id = db.Column(db.Integer, db.ForeignKey('aquariums.id', ondelete='CASCADE'), nullable=False, index=True)
+    parameter = db.Column(db.String(30), nullable=False)
+    min = db.Column(db.Float)
+    max = db.Column(db.Float)
+
+    def to_dict(self):
+        return {'parameter': self.parameter, 'min': self.min, 'max': self.max}
 
 class ScheduledTask(db.Model):
     """Scheduled maintenance tasks"""

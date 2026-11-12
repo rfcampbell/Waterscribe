@@ -8,12 +8,14 @@ Track water parameters, schedule maintenance, manage fish inventory, and monitor
 
 ## Features
 
+- **At a glance** — The Parameters page opens on one tile per parameter the tank has data for: latest value (bad readings never count; a suspect latest gets ⚠), method, age, a 30-day sparkline and the tank's target band. A tile fades with an amber age once its reading is older than the parameter's staleness limit (`STALE_DAYS` in `app/catalog.py`: EC 2 d, nitrate 7 d, KH/GH 14 d...). The value turns seafoam in band, coral out of band. Tanks with a degassed pH that pairs with a same-day in-tank pH (nearest in time) in the last 90 days get a derived **CO2 pH drop** tile showing the two readings used. Logic in `app/overview.py`
 - **Water Parameters** — Each reading is its own record: value, optional min–max range (for colour-chart kits), method/kit, quality (`ok` / `suspect` / `bad`) and a note. Several readings taken together are entered in one form. Parameters: pH, ammonia, nitrite, nitrate, KH, GH, EC, degassed pH, temperature, TDS, phosphate, potassium, iron — add or reorder in `app/catalog.py`. Rows on the entry grid collapse; collapsed state is remembered per browser
 - **Charts** — One chart per parameter group over 7/30/90 days or all time. Water changes are drawn as dashed lines, CO2 bubble rate as a step chart; suspect readings are marked, bad ones are left off
 - **Scheduled Tasks** — Recurring and one-time maintenance reminders
 - **Fish Inventory** — Track species with held/planned counts, auto-fetched Wikipedia thumbnails and species info
 - **Events** — Water changes (%), CO2 bubble rate (bubbles/30s), fertilizer dose (ml/day), one-off doses, ammonia doses (ppm), livestock added, filter seeding, cycle complete, drop checker refills, equipment changes and routine maintenance; completed scheduled tasks are logged here too
-- **Multi-Aquarium** — Track multiple tanks; the Manage Aquariums page (`/aquariums`) lists every tank with edit and delete. Every tank has a short unique code (`100P`, `HQT`), which is required (the database enforces it); CSV import and the MCP server name tanks by it. **+ Add Aquarium** on the dashboard opens that page's form
+- **Multi-Aquarium** — Track multiple tanks; the Manage Aquariums page (`/aquariums`) lists every tank with edit and delete. Every tank has a short unique code (`100P`, `HQT`), which is required (the database enforces it); CSV import and the MCP server name tanks by it. The dashboard switches tanks with code pills, in each tank's **Order** (editable on Manage; new tanks go last), and remembers the last one picked; the **+** pill opens Manage's add form
+- **Target ranges** — Per tank and parameter (plus CO2 pH drop), either end optional, edited under *Target ranges* on Manage Aquariums. Values outside the parameter's plausible range are rejected
 - **CSV Export / Import** — Readings and events export as CSV from the Charts tab; `import_csv.py` reads the same format (see below)
 - **PWA** — Install as a standalone app on iOS/Android from the browser
 - **Claude connector** — `waterscribe_mcp/` is an insert-only MCP server, so Claude can log readings and events and read recent history (see [waterscribe_mcp/README.md](waterscribe_mcp/README.md))
@@ -26,7 +28,7 @@ The UI features a dark ocean theme with animated bubbles, gradient accents, and 
 ## Tech Stack
 
 - **Backend:** Python 3 / Flask / SQLAlchemy / PostgreSQL
-- **Frontend:** Vanilla HTML/CSS/JS / Chart.js
+- **Frontend:** Vanilla HTML/CSS/JS / Chart.js (pinned to 4.6.1 in `base.html`)
 - **Deployment:** Gunicorn + Nginx + systemd
 - **PWA:** Service worker + Web App Manifest
 

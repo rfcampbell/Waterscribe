@@ -95,3 +95,22 @@ def conversion_divisor(key, unit):
     if conv and canon_unit(unit) in {canon_unit(u) for u in conv[1]}:
         return conv[0]
     return None
+
+# Days after which a parameter's latest reading counts as stale (tile fades, age turns amber).
+STALE_DAYS = {
+    'ec': 2, 'temperature': 2,
+    'ph': 3, 'ph_degassed': 3, 'co2_drop': 3,
+    'nitrate': 7, 'ammonia': 7, 'nitrite': 7, 'tds': 7,
+    'kh': 14, 'gh': 14, 'phosphate': 14, 'potassium': 14, 'iron': 14,
+}
+
+# Derived, not stored as readings: degassed pH minus the in-tank pH nearest in time that day.
+# Can have a target range like a parameter.
+CO2_DROP = 'co2_drop'
+CO2_DROP_LABEL = 'CO2 pH drop'
+TARGET_KEYS = {**{k: p[0] for k, p in PARAMETERS.items()}, CO2_DROP: CO2_DROP_LABEL}
+TARGET_RANGES = {**RANGES, CO2_DROP: (0, 3)}   # plausibility for target min/max
+
+# Tile order on the Parameters page: the ones checked most first, then catalog order.
+TILE_ORDER = ['ec', 'nitrate', 'ph', CO2_DROP, 'ph_degassed', 'kh', 'gh', 'temperature', 'tds',
+              'ammonia', 'nitrite', 'phosphate', 'potassium', 'iron']
