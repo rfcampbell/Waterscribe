@@ -28,7 +28,17 @@ def create_app(config_name='default'):
     # Context processors
     @app.context_processor
     def inject_config():
-        return dict(config=app.config)
+        return dict(config=app.config, static_v=static_v)
+
+    # nginx serves /static with a 30-day expiry, so app JS carries its mtime: a deploy changes the URL
+    def static_v(filename):
+        import os
+        from flask import url_for
+        try:
+            v = int(os.path.getmtime(os.path.join(app.static_folder, filename)))
+        except OSError:
+            v = 0
+        return url_for('static', filename=filename, v=v)
 
     # Pages are rendered per request: make browsers and the iOS web view revalidate instead of
     # showing a stale copy after a deploy (static files keep nginx's long expiry)

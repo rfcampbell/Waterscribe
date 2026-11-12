@@ -128,3 +128,6 @@ TILE_GROUPS = [
     ['kh', 'gh', 'ammonia', 'nitrite', 'tds', 'temperature'],
     ['ph', CO2_DROP, 'ph_degassed', 'co2_bubble_rate'],
 ]
+# One name per TILE_GROUPS entry: the tile's top-edge accent (.grp-<name>). Tiles not in a group get none.
+TILE_GROUP_NAMES = ['nutrients', 'hardness', 'co2']
+TILE_GROUP_OF = {k: name for name, g in zip(TILE_GROUP_NAMES, TILE_GROUPS) for k in g}

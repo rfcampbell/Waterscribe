@@ -44,15 +44,20 @@
     .tank-meta-line a { color: var(--pearl); text-decoration: none; border-bottom: 1px dotted rgba(240, 244, 248, 0.4); }
     .tank-meta-line .sep { opacity: 0.5; margin: 0 4px; }
 
-    .tile-groups { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
-    .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+    /* one continuous grid in TILE_GROUPS order; groups show as a top-edge accent, not row breaks */
+    .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-bottom: 18px;
+             --grp-nutrients: #8bd17c; --grp-hardness: #6ea8fe; --grp-co2: #b39dfa; }
     .tile {
         display: flex; flex-direction: column; gap: 3px; text-align: left; min-width: 0;
         padding: 10px 12px 8px; border-radius: 12px; cursor: pointer; font: inherit; color: var(--pearl);
-        background: rgba(240, 244, 248, 0.05); border: 1px solid rgba(240, 244, 248, 0.1);
-        transition: border-color 0.15s ease, background 0.15s ease;
+        background-color: rgba(240, 244, 248, 0.05); border: 1px solid rgba(240, 244, 248, 0.1);
+        background-image: linear-gradient(var(--grp, transparent) 0 0); background-size: 100% 3px; background-repeat: no-repeat;
+        transition: border-color 0.15s ease, background-color 0.15s ease;
     }
-    .tile:hover { background: rgba(240, 244, 248, 0.08); }
+    .tile.grp-nutrients { --grp: var(--grp-nutrients); }
+    .tile.grp-hardness { --grp: var(--grp-hardness); }
+    .tile.grp-co2 { --grp: var(--grp-co2); }
+    .tile:hover { background-color: rgba(240, 244, 248, 0.08); }
     .tile.selected { border-color: var(--seafoam); box-shadow: 0 0 0 1px var(--seafoam) inset; }
     .tile-head { display: flex; justify-content: space-between; gap: 6px; font-size: 0.76rem; }
     .tile-label { opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -228,7 +233,6 @@
 
     @media (max-width: 520px) {
         .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-        .tile-groups { gap: 8px; }
         .main-chart { margin-left: -15px; margin-right: -15px; border-radius: 0; border-left: 0; border-right: 0; padding: 10px 10px 8px; }
         .mc-box { height: 240px; }
         .tile-value { font-size: 1.4rem; }
@@ -430,6 +434,7 @@
     .badge-bad { background: rgba(224, 128, 128, 0.18); color: #f09090; border: 1px solid rgba(224, 128, 128, 0.4); }
     .edit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 8px; }
     .empty-note { text-align: center; opacity: 0.7; padding: 20px; }
+    .tiles > .empty-note { grid-column: 1 / -1; }
     .chart-legend-note { text-align: center; font-size: 0.85rem; opacity: 0.6; margin-bottom: 10px; }
     .chart-controls { flex-wrap: wrap; }
     .chart-panel { background: rgba(240, 244, 248, 0.02); padding: 15px 15px 10px; border-radius: 12px; margin-top: 18px; }
@@ -500,12 +505,11 @@
 </svg>
 {%- endmacro %}
 {% macro when(r) %}{{ r.timestamp.strftime('%b %-d') }}{% if r.time_known %} {{ r.timestamp.strftime('%H:%M') }}{% endif %}{% endmacro %}
-<div class="tile-groups" id="tiles">
+<div class="tiles" id="tiles">
     {% for group in tile_groups %}
-    <div class="tiles">
     {% for t in group %}
     {% if t.value is none %}
-    <button type="button" class="tile stale" data-key="{{ t.key }}" onclick="selectTile('{{ t.key }}')"
+    <button type="button" class="tile stale{% if tile_group_of[t.key] %} grp-{{ tile_group_of[t.key] }}{% endif %}" data-key="{{ t.key }}" onclick="selectTile('{{ t.key }}')"
             title="{{ t.label }}: {{ t.message }} (CO2 window {{ t.window[0].strftime('%H:%M') }}–{{ t.window[1].strftime('%H:%M') }})">
         <div class="tile-head"><span class="tile-label">{{ t.label }}</span></div>
         <div class="tile-value tile-message">{{ t.message }}</div>
@@ -518,7 +522,7 @@
         {% if t.target %}<div class="tile-target">target {{ fmt_target(t.target) }}</div>{% endif %}
     </button>
     {% else %}
-    <button type="button" class="tile{% if t.stale %} stale{% endif %}{% if t.band %} band-{{ t.band }}{% endif %}" data-key="{{ t.key }}" onclick="selectTile('{{ t.key }}')"
+    <button type="button" class="tile{% if tile_group_of[t.key] %} grp-{{ tile_group_of[t.key] }}{% endif %}{% if t.stale %} stale{% endif %}{% if t.band %} band-{{ t.band }}{% endif %}" data-key="{{ t.key }}" onclick="selectTile('{{ t.key }}')"
             title="{{ t.label }}: {{ t.timestamp.strftime('%Y-%m-%d' + (' %H:%M' if t.time_known else ' (time unknown)')) }}{% if t.stale %} — stale{% endif %}{% if t.suspect %} — flagged suspect{% endif %}">
         <div class="tile-head"><span class="tile-label">{{ t.label }}</span><span class="tile-age">{{ t.age }}</span></div>
         <div class="tile-value">{{ '%g' % t.value }}{% if t.unit %}<span class="tile-unit">{{ t.unit }}</span>{% endif %}{% if t.suspect %}<span class="tile-suspect" aria-label="suspect">⚠</span>{% endif %}
@@ -533,7 +537,6 @@
     </button>
     {% endif %}
     {% endfor %}
-    </div>
     {% else %}
     <p class="empty-note">No readings for this tank yet.</p>
     {% endfor %}
@@ -766,7 +769,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/mainchart.js') }}"></script>
+<script src="{{ static_v('js/mainchart.js') }}"></script>
 <script>
     let chart = null;
     const currentAquariumId = {{ selected_aquarium.id }};

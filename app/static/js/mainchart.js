@@ -41,14 +41,19 @@
     const shown = p => S.showBad || !isBad(p);
     const inWin = x => x >= S.win[0] && x <= S.win[1];
 
+    // y scale fits the ok readings (plus target band). Suspect and shown-bad points outside it are
+    // pinned to the edge with a marker (clipPlugin) and keep their real value in the tooltip.
+    // Only if the window has no ok reading at all does the scale fit whatever is shown.
     function yRange() {
-        const vals = [];
+        const vals = [], fallback = [];
         for (const p of S.data.points) {
             if (!shown(p) || !inWin(p.x)) continue;
-            vals.push(p.y);
-            if (p.min !== null) vals.push(p.min);
-            if (p.max !== null) vals.push(p.max);
+            const into = p.quality === 'ok' ? vals : fallback;
+            into.push(p.y);
+            if (p.min !== null) into.push(p.min);
+            if (p.max !== null) into.push(p.max);
         }
+        if (!vals.length) vals.push(...fallback);
         if (S.data.step && S.data.points.length) {   // the setting in force at the left edge
             const before = S.data.points.filter(p => p.x < S.win[0]).pop();
             if (before) vals.push(before.y);
@@ -107,13 +112,40 @@
                 if (p.min === null && p.max === null) continue;
                 if (!shown(p) || !inWin(p.x)) continue;
                 const px = x.getPixelForValue(p.x);
-                const y1 = y.getPixelForValue(p.min ?? p.y), y2 = y.getPixelForValue(p.max ?? p.y);
+                const cl = v => Math.max(a.top, Math.min(a.bottom, y.getPixelForValue(v)));
+                const y1 = cl(p.min ?? p.y), y2 = cl(p.max ?? p.y);
                 ctx.strokeStyle = isBad(p) ? 'rgba(240, 244, 248, 0.35)' : 'rgba(78, 205, 196, 0.75)';
                 ctx.beginPath();
                 ctx.moveTo(px, y1); ctx.lineTo(px, y2);
                 ctx.moveTo(px - 4, y1); ctx.lineTo(px + 4, y1);
                 ctx.moveTo(px - 4, y2); ctx.lineTo(px + 4, y2);
                 ctx.stroke();
+            }
+            ctx.restore();
+        }
+    };
+    // clamp each plotted point into the y range; .real keeps the reading's value
+    function clampToRange(r) {
+        for (const ds of S.chart.data.datasets) for (const d of ds.data) {
+            const v = d.real;
+            d.clip = r.max !== undefined && v > r.max ? 'up' : r.min !== undefined && v < r.min ? 'down' : null;
+            d.y = d.clip === 'up' ? r.max : d.clip === 'down' ? r.min : v;
+        }
+    }
+    const clipPlugin = {
+        id: 'clipMarkers',
+        afterDatasetsDraw(chart) {
+            const { ctx, chartArea: a, scales: { x } } = chart;
+            ctx.save();
+            for (const ds of chart.data.datasets) for (const d of ds.data) {
+                if (!d.clip || d.synthetic) continue;
+                const px = x.getPixelForValue(d.x);
+                if (px < a.left || px > a.right) continue;
+                const up = d.clip === 'up', edge = up ? a.top : a.bottom, s = up ? 1 : -1;
+                ctx.fillStyle = d.quality === 'bad' ? 'rgba(240, 244, 248, 0.6)' : d.quality === 'suspect' ? SAND : SEAFOAM;
+                ctx.beginPath();     // triangle pointing off the chart, its tip on the edge
+                ctx.moveTo(px, edge + s); ctx.lineTo(px - 5, edge + s * 9); ctx.lineTo(px + 5, edge + s * 9); ctx.closePath();
+                ctx.fill();
             }
             ctx.restore();
         }
@@ -132,7 +164,8 @@
             ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
             if (c.kind === 'point') {
                 ctx.strokeStyle = PEARL; ctx.lineWidth = 2;
-                ctx.beginPath(); ctx.arc(px, y.getPixelForValue(c.item.y), 7, 0, Math.PI * 2); ctx.stroke();
+                const cy = Math.max(a.top, Math.min(a.bottom, y.getPixelForValue(c.item.y)));
+                ctx.beginPath(); ctx.arc(px, cy, 7, 0, Math.PI * 2); ctx.stroke();
             }
             ctx.restore();
         }
@@ -141,21 +174,21 @@
     // ---- chart ----
     function datasets() {
         const color = p => p.quality === 'suspect' ? SAND : SEAFOAM;
-        const main = S.data.points.filter(p => !isBad(p)).map(p => ({ ...p }));
+        const main = S.data.points.filter(p => !isBad(p)).map(p => ({ ...p, real: p.y }));
         if (S.data.step && main.length) main.push({ ...main[main.length - 1], x: Date.now(), synthetic: true });
         const sets = [{
             label: S.data.label, data: main, parsing: false, borderColor: SEAFOAM, borderWidth: 2,
             cubicInterpolationMode: 'monotone', stepped: S.data.step ? 'before' : false, spanGaps: true,
             backgroundColor: SEAFOAM,
-            pointRadius: c => c.raw?.synthetic ? 0 : 3.5,
-            pointHoverRadius: c => c.raw?.synthetic ? 0 : 3.5,
+            pointRadius: c => c.raw?.synthetic || c.raw?.clip ? 0 : 3.5,
+            pointHoverRadius: c => c.raw?.synthetic || c.raw?.clip ? 0 : 3.5,
             pointBorderWidth: c => c.raw?.quality === 'suspect' ? 2 : 1,
             pointBackgroundColor: c => c.raw?.quality === 'suspect' ? 'rgba(10, 22, 40, 0.9)' : color(c.raw || {}),
             pointBorderColor: c => color(c.raw || {}),
         }];
         if (S.showBad) sets.push({
-            label: 'bad', data: S.data.points.filter(isBad).map(p => ({ ...p })), parsing: false, showLine: false,
-            pointStyle: 'crossRot', pointRadius: 5, pointBorderWidth: 2, borderColor: 'rgba(240, 244, 248, 0.45)',
+            label: 'bad', data: S.data.points.filter(isBad).map(p => ({ ...p, real: p.y })), parsing: false, showLine: false,
+            pointStyle: 'crossRot', pointRadius: c => c.raw?.clip ? 0 : 5, pointBorderWidth: 2, borderColor: 'rgba(240, 244, 248, 0.45)',
         });
         return sets;
     }
@@ -176,7 +209,7 @@
                     y: { ...yRange(), grid, ticks: { ...tick, maxTicksLimit: 6, includeBounds: false } }
                 }
             },
-            plugins: [bandPlugin, eventsPlugin, errorBarsPlugin, crossPlugin]
+            plugins: [bandPlugin, eventsPlugin, errorBarsPlugin, clipPlugin, crossPlugin]
         });
     }
 
@@ -184,7 +217,9 @@
         const c = S.chart;
         c.options.scales.x.min = S.win[0];
         c.options.scales.x.max = S.win[1];
-        Object.assign(c.options.scales.y, { min: undefined, max: undefined }, yRange());
+        const r = yRange();
+        Object.assign(c.options.scales.y, { min: undefined, max: undefined }, r);
+        clampToRange(r);
         c.update('none');
         const any = S.data.points.some(p => shown(p) && inWin(p.x));
         $('mc-empty').hidden = any;
