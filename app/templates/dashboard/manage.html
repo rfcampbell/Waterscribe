@@ -139,14 +139,14 @@
                 {% if a.code %}<span class="tank-code">{{ a.code }}</span> &middot; {% endif %}{{ a.type or 'No type set' }}
                 &middot; {% if a.volume_gallons is not none %}{{ '%g' % a.volume_gallons }} gal{% else %}Volume not set{% endif %}
                 {% if a.co2_on %}&middot; CO2 {{ a.co2_on.strftime('%H:%M') }}–{{ a.co2_off.strftime('%H:%M') }}{% endif %}
-                &middot; {{ c.readings }} readings, {{ c.events }} events, {{ c.tasks }} tasks, {{ c.fish }} fish entries
+                &middot; {{ c.readings }} readings, {{ c.events }} events, {% if config.FEATURE_SCHEDULE %}{{ c.tasks }} tasks, {% endif %}{{ c.fish }} fish entries
             </div>
             {% if a.description %}<div class="tank-desc">{{ a.description }}</div>{% endif %}
         </div>
         <div class="tank-actions">
             <button type="button" class="btn btn-secondary edit-toggle" onclick="toggleEdit({{ a.id }}, true)">Edit</button>
             <form method="post" action="{{ url_for('dashboard.delete_aquarium', aquarium_id=a.id) }}"
-                  onsubmit="return confirm({{ ('Delete \"' ~ a.name ~ '\"? This permanently removes its ' ~ c.readings ~ ' readings, ' ~ c.events ~ ' events, ' ~ c.tasks ~ ' tasks and ' ~ c.fish ~ ' fish entries.')|tojson|forceescape }});">
+                  onsubmit="return confirm({{ ('Delete \"' ~ a.name ~ '\"? This permanently removes its ' ~ c.readings ~ ' readings, ' ~ c.events ~ ' events' ~ (', ' ~ c.tasks ~ ' tasks and ' if config.FEATURE_SCHEDULE or c.tasks else ' and ') ~ c.fish ~ ' fish entries.')|tojson|forceescape }});">
                 <button type="submit" class="btn btn-danger">Delete</button>
             </form>
         </div>

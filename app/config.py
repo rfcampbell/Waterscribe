@@ -4,8 +4,16 @@ Configuration settings for WaterScribe
 import os
 from datetime import timedelta
 
+def env_flag(name, default=False):
+    v = os.environ.get(name)
+    return default if v is None else v.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
 class Config:
     """Base configuration"""
+    # Schedule feature (tab, header task count, Manage task counts). Off hides every UI entry point;
+    # the table, model, API routes and check_tasks.py are untouched. Set FEATURE_SCHEDULE=true in .env.
+    FEATURE_SCHEDULE = env_flag('FEATURE_SCHEDULE')
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
     
     # Database

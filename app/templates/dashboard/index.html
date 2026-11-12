@@ -484,8 +484,8 @@
     </h1>
     <div class="tank-meta-line">
         <a href="#fish" onclick="navigateTab('fish'); return false;">{{ fish_held }} fish{% if fish_planned %} · {{ fish_planned }} planned{% endif %}</a>
-        <span class="sep">·</span>
-        <a href="#schedule" onclick="navigateTab('schedule'); return false;">{% if next_task %}{{ upcoming_tasks|length }} task{{ '' if upcoming_tasks|length == 1 else 's' }} · next: {{ next_task.task_name }}{% if next_task.next_due %} {{ next_task.next_due.strftime('%b %-d') }}{% endif %}{% else %}no tasks{% endif %}</a>
+        {% if config.FEATURE_SCHEDULE %}<span class="sep">·</span>
+        <a href="#schedule" onclick="navigateTab('schedule'); return false;">{% if next_task %}{{ upcoming_tasks|length }} task{{ '' if upcoming_tasks|length == 1 else 's' }} · next: {{ next_task.task_name }}{% if next_task.next_due %} {{ next_task.next_due.strftime('%b %-d') }}{% endif %}{% else %}no tasks{% endif %}</a>{% endif %}
     </div>
   </div>
     <button type="button" class="btn btn-primary log-btn" id="log-btn" onclick="openEntry()" aria-haspopup="dialog">+ Add new entry<span class="pending-n" id="log-btn-n"></span></button>
@@ -569,7 +569,7 @@
 <div class="tabs">
     <button class="tab-btn active" onclick="showTab('parameters')">Parameters</button>
     <button class="tab-btn" onclick="showTab('charts')">Charts</button>
-    <button class="tab-btn" onclick="showTab('schedule')">Schedule</button>
+    {% if config.FEATURE_SCHEDULE %}<button class="tab-btn" onclick="showTab('schedule')">Schedule</button>{% endif %}
     <button class="tab-btn" onclick="showTab('events')">Events</button>
     <button class="tab-btn" onclick="showTab('fish')">Fish</button>
 </div>
@@ -641,7 +641,7 @@
     </div>
 </div>
 
-<!-- Schedule Tab -->
+<!-- Schedule Tab -->{% if config.FEATURE_SCHEDULE %}
 <div id="tab-schedule" class="tab-content">
     <div class="section">
         <h2 class="section-title">Scheduled Tasks</h2>
@@ -692,7 +692,7 @@
             {% endfor %}
         </div>
     </div>
-</div>
+</div>{% endif %}
 
 <!-- Events Tab -->
 <div id="tab-events" class="tab-content">
