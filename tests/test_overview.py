@@ -5,15 +5,17 @@ from datetime import datetime, timedelta, time
 from types import SimpleNamespace
 
 from app.overview import (age_text, is_stale, band_state, build_tiles, spark, in_window,
-                          co2_drop_at, co2_series, series)
+                          co2_drop_at, co2_series, series, group_sessions, shared_note, log_days, SESSION_WINDOW)
 
 NOW = datetime(2026, 11, 11, 20, 0)
 _ids = iter(range(1, 10_000))
 
 
-def R(param, value, ts, quality='ok', time_known=True, method=None, vmin=None, vmax=None):
-    return SimpleNamespace(id=next(_ids), parameter=param, value=value, timestamp=ts, quality=quality,
-                           time_known=time_known, method=method, value_min=vmin, value_max=vmax, notes=None)
+def R(param, value, ts, quality='ok', time_known=True, method=None, vmin=None, vmax=None, notes=None):
+    r = SimpleNamespace(id=next(_ids), parameter=param, value=value, timestamp=ts, quality=quality,
+                        time_known=time_known, method=method, value_min=vmin, value_max=vmax, notes=notes)
+    r.to_dict = lambda: {'id': r.id, 'parameter': r.parameter, 'value': r.value, 'notes': r.notes}
+    return r
 
 
 def ago(**kw):
@@ -250,6 +252,66 @@ class Co2DropWaterChange(unittest.TestCase):
         out = series('co2_drop', [d1, p1, p2, d2, p3], [wc], {}, WIN)
         self.assertEqual([p['pair']['degassed']['y'] for p in out['points']], [7.4, 7.6, 7.6])
         self.assertEqual(len(co2_series([d1, p1, p2, d2, p3], *WIN)), 4)   # without the change, (6.5, 7.4) appears
+
+
+class Sessions(unittest.TestCase):
+    day = datetime(2026, 11, 6)
+
+    def at(self, h, m=0, **kw):
+        return self.day.replace(hour=h, minute=m)
+
+    def shape(self, sessions):
+        return [sorted(r.timestamp.strftime('%H:%M') for r in s) for s in sessions]
+
+    def test_window_is_a_constant_of_ten_minutes(self):
+        self.assertEqual(SESSION_WINDOW, timedelta(minutes=10))
+
+    def test_same_minute_and_within_window_group(self):
+        rs = [R('ec', 1, self.at(6, 0)), R('kh', 1, self.at(6, 0)), R('ph', 1, self.at(6, 4)), R('no3', 1, self.at(6, 10))]
+        self.assertEqual(self.shape(group_sessions(rs)), [['06:00', '06:00', '06:04', '06:10']])
+
+    def test_anchored_to_first_reading_not_chained(self):
+        rs = [R('ec', 1, self.at(6, 0)), R('kh', 1, self.at(6, 8)), R('ph', 1, self.at(6, 16))]
+        self.assertEqual(self.shape(group_sessions(rs)), [['06:00', '06:08'], ['06:16']])
+        rs = [R('ec', 1, self.at(6, 0)), R('kh', 1, self.at(6, 11))]
+        self.assertEqual(len(group_sessions(rs)), 2)
+
+    def test_unknown_time_groups_only_with_unknown_same_day(self):
+        u1 = R('ec', 1, self.at(12), time_known=False)
+        u2 = R('kh', 1, self.at(12), time_known=False)
+        timed_noon = R('ph', 1, self.at(12, 5))
+        other_day = R('gh', 1, datetime(2026, 11, 7, 12), time_known=False)
+        sessions = group_sessions([timed_noon, u1, other_day, u2])
+        self.assertEqual([{r.id for r in s} for s in sessions], [{u1.id, u2.id}, {timed_noon.id}, {other_day.id}])
+
+    def test_never_spans_midnight(self):
+        rs = [R('ec', 1, datetime(2026, 11, 6, 23, 58)), R('kh', 1, datetime(2026, 11, 7, 0, 3))]
+        self.assertEqual(len(group_sessions(rs)), 2)
+
+    def test_readings_within_a_session_in_tile_order(self):
+        rs = [R('ph', 1, self.at(6)), R('kh', 1, self.at(6, 1)), R('ec', 1, self.at(6, 2))]
+        self.assertEqual([r.parameter for r in group_sessions(rs)[0]], ['ec', 'kh', 'ph'])
+
+    def test_shared_note(self):
+        same = [R('ec', 1, self.at(6), notes='pre-change'), R('kh', 1, self.at(6), notes=' pre-change ')]
+        self.assertEqual(shared_note(same), 'pre-change')
+        self.assertIsNone(shared_note([R('ec', 1, self.at(6), notes='a'), R('kh', 1, self.at(6), notes='b')]))
+        self.assertIsNone(shared_note([R('ec', 1, self.at(6), notes='a'), R('kh', 1, self.at(6))]))
+        self.assertIsNone(shared_note([R('ec', 1, self.at(6)), R('kh', 1, self.at(6))]))
+
+    def test_log_orders_days_and_interleaves_events(self):
+        ev = lambda t, h, m=0, known=True: SimpleNamespace(id=next(_ids), event_type=t, value=50, notes=None,
+                                                           timestamp=self.day.replace(hour=h, minute=m), time_known=known)
+        rs = [R('ec', 1, self.at(10), notes='pre-change'), R('ec', 2, self.at(14)),
+              R('ec', 3, datetime(2026, 11, 5, 9)), R('kh', 4, self.at(12), time_known=False)]
+        days = log_days(rs, [ev('water_change', 10), ev('glass_clean', 12, 30), ev('filter_clean', 12, known=False)])
+        self.assertEqual([d['date'] for d in days], ['2026-11-06', '2026-11-05'])
+        items = days[0]['items']
+        self.assertEqual([(i['kind'], i['time']) for i in items],
+                         [('session', None), ('event', None), ('session', '10:00'), ('event', '10:00'),
+                          ('event', '12:30'), ('session', '14:00')])
+        self.assertEqual(items[2]['shared_note'], 'pre-change')
+        self.assertEqual((items[3]['label'], items[3]['unit']), ('Water change', '%'))
 
 
 class Series(unittest.TestCase):

@@ -126,6 +126,15 @@ class Targets(unittest.TestCase):
         self.assertEqual(self.c.get(f'/api/aquarium/{self.tid}/series?key=nope').status_code, 400)
         self.assertEqual(self.c.get('/api/aquarium/999999/series?key=ec').status_code, 404)
 
+    def test_log_endpoint(self):
+        self.c.post(f'/api/aquarium/{self.tid}/readings', json={'date': '2026-11-06', 'time': '06:00', 'readings': [
+            {'parameter': 'ec', 'value': 300, 'notes': 'pre'}, {'parameter': 'kh', 'value': 4, 'notes': 'pre'}]})
+        self.c.post(f'/api/aquarium/{self.tid}/events', json={'date': '2026-11-06', 'time': '10:00', 'event_type': 'water_change', 'value': 50})
+        days = self.c.get(f'/api/aquarium/{self.tid}/log').get_json()['days']
+        self.assertEqual([(i['kind'], i['time']) for i in days[0]['items']], [('session', '06:00'), ('event', '10:00')])
+        self.assertEqual(days[0]['items'][0]['shared_note'], 'pre')
+        self.assertEqual(self.c.get('/api/aquarium/999999/log').status_code, 404)
+
 
 if __name__ == '__main__':
     unittest.main()

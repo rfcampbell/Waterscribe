@@ -238,3 +238,68 @@ def series(key, readings, events, targets, co2_window=None):
     else:
         return None
     return out
+
+
+# ---- Session log ----
+
+SESSION_WINDOW = timedelta(minutes=10)   # a session: readings within this of its first reading
+
+
+def _param_rank(key):
+    order = [k for g in TILE_GROUPS for k in g]
+    return order.index(key) if key in order else len(order)
+
+
+def group_sessions(readings, window=SESSION_WINDOW):
+    """Readings -> sessions (lists), oldest first. A session never spans days. Timed readings join the
+    session whose FIRST reading is at most `window` earlier (no chaining). Unknown-time readings form
+    one session per day, placed before that day's timed sessions."""
+    sessions = []
+    by_day = {}
+    for r in readings:
+        by_day.setdefault(r.timestamp.date(), []).append(r)
+    for day in sorted(by_day):
+        rs = by_day[day]
+        unknown = [r for r in rs if not r.time_known]
+        if unknown:
+            sessions.append(sorted(unknown, key=lambda r: (_param_rank(r.parameter), r.id or 0)))
+        current = None
+        for r in sorted((r for r in rs if r.time_known), key=lambda r: (r.timestamp, r.id or 0)):
+            if current and r.timestamp - current[0].timestamp <= window:
+                current.append(r)
+            else:
+                current = [r]
+                sessions.append(current)
+    for s in sessions:
+        if s[0].time_known:
+            s.sort(key=lambda r: (_param_rank(r.parameter), r.timestamp, r.id or 0))
+    return sessions
+
+
+def shared_note(session):
+    """The note if every reading in the session has the same non-empty note, else None."""
+    notes = {(r.notes or '').strip() for r in session}
+    return notes.pop() if len(notes) == 1 and '' not in notes else None
+
+
+def log_days(readings, events):
+    """Session log, newest day first; within a day, time order (unknown-time rows first, and at the
+    same minute readings before events, e.g. a 'pre-change' test before the water change)."""
+    from app.catalog import EVENT_TYPES
+    days = {}
+    for s in group_sessions(readings):
+        first = min(s, key=lambda r: r.timestamp)
+        days.setdefault(first.timestamp.date(), []).append(
+            ((first.time_known, first.timestamp, 0), {
+                'kind': 'session', 'time': first.timestamp.strftime('%H:%M') if first.time_known else None,
+                'time_known': first.time_known, 'shared_note': shared_note(s),
+                'readings': [r.to_dict() for r in s]}))
+    for e in events:
+        label, unit = EVENT_TYPES.get(e.event_type, (e.event_type, None))
+        days.setdefault(e.timestamp.date(), []).append(
+            ((e.time_known, e.timestamp, 1), {
+                'kind': 'event', 'id': e.id, 'time': e.timestamp.strftime('%H:%M') if e.time_known else None,
+                'time_known': e.time_known, 'type': e.event_type, 'label': label, 'unit': unit,
+                'value': e.value, 'notes': e.notes}))
+    return [{'date': d.isoformat(), 'items': [item for _, item in sorted(days[d], key=lambda x: x[0])]}
+            for d in sorted(days, reverse=True)]

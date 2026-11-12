@@ -465,6 +465,20 @@ def tile_series(aquarium_id):
     out = series(key, readings, events, targets_for(aquarium_id), (aquarium.co2_on, aquarium.co2_off))
     return jsonify(out) if out else _err(f'unknown key {key!r}')
 
+@bp.route('/aquarium/<int:aquarium_id>/log')
+def session_log(aquarium_id):
+    """Parameters page log: days of reading sessions and events (?days=N limits). Read-only;
+    not used by the MCP server."""
+    from app.overview import log_days
+    if not get_aquarium(aquarium_id):
+        return _err('Aquarium not found', 404)
+    since = _since()
+    rq = Reading.query.filter_by(aquarium_id=aquarium_id)
+    eq = Event.query.filter_by(aquarium_id=aquarium_id)
+    if since:
+        rq, eq = rq.filter(Reading.timestamp >= since), eq.filter(Event.timestamp >= since)
+    return jsonify({'days': log_days(rq.all(), eq.all())})
+
 def latest_readings(aquarium_id):
     """Most recent non-bad reading per parameter: {parameter: Reading}."""
     sub = db.session.query(Reading.parameter, db.func.max(Reading.timestamp).label('ts')).filter(

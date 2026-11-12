@@ -95,6 +95,86 @@
     .mc-foot label { cursor: pointer; }
     .lg-wc { color: #60a5fa; } .lg-ev { color: rgba(240, 244, 248, 0.5); }
 
+    /* Session log: lab-notebook rows, one table per day */
+    .log-title { margin-top: 6px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+    .chip {
+        font: inherit; font-size: 0.8rem; padding: 4px 11px; border-radius: 999px; cursor: pointer; color: var(--pearl);
+        background: rgba(240, 244, 248, 0.05); border: 1px solid rgba(240, 244, 248, 0.14);
+    }
+    .chip.active { background: var(--seafoam); color: var(--deep-ocean); border-color: transparent; }
+    .log-day h3 { font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--seafoam); opacity: 0.85; margin: 16px 0 4px; }
+    .ltable { border-top: 1px solid rgba(240, 244, 248, 0.12); border-bottom: 1px solid rgba(240, 244, 248, 0.12); }
+    .lrow, .lhead {
+        display: grid; column-gap: 10px; align-items: center; padding: 0 8px; font-size: 0.85rem;
+        grid-template-columns: 46px minmax(90px, 130px) 8ch 64px 72px minmax(100px, 1fr) 72px minmax(100px, 1.3fr) 30px;
+    }
+    .lrow { min-height: 30px; border-top: 1px solid rgba(240, 244, 248, 0.05); }
+    .lrow:nth-child(even) { background: rgba(240, 244, 248, 0.028); }
+    .lrow.sfirst { border-top-color: rgba(240, 244, 248, 0.17); }
+    .ltable > :first-child { border-top: 0; }
+    .lhead { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.7px; opacity: 0.5; padding-top: 4px; padding-bottom: 2px; }
+    .c-time { font-family: 'Space Mono', monospace; font-size: 0.76rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
+    .c-val { font-family: 'Space Mono', monospace; font-size: 0.82rem; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+    .v-int { display: inline-block; min-width: 4ch; text-align: right; }
+    .v-frac { display: inline-block; width: 3ch; text-align: left; }
+    .c-range { font-family: 'Space Mono', monospace; font-size: 0.74rem; font-variant-numeric: tabular-nums; }
+    .c-range, .c-unit, .c-method, .c-note { opacity: 0.7; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .c-param, .c-event { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .c-sub, .m-unit { display: none; }
+    .qb { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.6px; padding: 1px 5px; border-radius: 4px; }
+    .qb-suspect { color: var(--sand); background: rgba(247, 178, 103, 0.13); border: 1px solid rgba(247, 178, 103, 0.4); }
+    .qb-bad { color: rgba(240, 244, 248, 0.65); background: rgba(240, 244, 248, 0.06); border: 1px solid rgba(240, 244, 248, 0.22); }
+    .lrow.q-bad > :not(.c-menu):not(.c-q) { opacity: 0.42; }
+    .lrow.q-bad .c-val { text-decoration: line-through; }
+    .c-menu { position: relative; text-align: right; }
+    .menu-btn {
+        background: none; border: 0; color: var(--pearl); font-size: 1.1rem; line-height: 1; cursor: pointer;
+        padding: 2px 6px; border-radius: 4px; opacity: 0; transition: opacity 0.1s ease;
+    }
+    .lrow:hover .menu-btn, .menu-btn:focus-visible, .lrow.menu-open .menu-btn { opacity: 0.8; }
+    .menu-btn:hover { background: rgba(240, 244, 248, 0.08); }
+    @media (hover: none) { .menu-btn { opacity: 0.55; } }
+    .row-menu {
+        position: absolute; right: 0; top: 100%; z-index: 5; min-width: 160px; padding: 4px; text-align: left;
+        background: #0f1f36; border: 1px solid rgba(240, 244, 248, 0.18); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    }
+    .row-menu button {
+        display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--pearl);
+        font: inherit; font-size: 0.85rem; padding: 7px 10px; border-radius: 5px; cursor: pointer;
+    }
+    .row-menu button:hover, .row-menu button:focus-visible { background: rgba(240, 244, 248, 0.08); }
+    .row-menu .danger { color: #f09090; }
+    .row-menu .confirm-text { font-size: 0.8rem; padding: 6px 10px 2px; opacity: 0.85; }
+    .lrow.levent { grid-template-columns: 46px minmax(0, 1fr); border-left: 3px solid rgba(240, 244, 248, 0.3); padding-left: 5px; }
+    .lrow.levent.ev-water_change { border-left-color: #60a5fa; background: rgba(96, 165, 250, 0.08); }
+    .lrow.levent.ev-co2_bubble_rate { border-left-color: #86efac; }
+    .c-event { font-size: 0.85rem; }
+    .ev-icon { margin-right: 6px; }
+    .ev-note { opacity: 0.65; margin-left: 10px; font-size: 0.8rem; }
+    .lrow-edit { margin: 0; border-radius: 0; border-left: 0; border-right: 0; background: rgba(78, 205, 196, 0.05); }
+    .edit-error { color: #f09090; font-size: 0.85rem; margin-top: 6px; }
+
+    @media (max-width: 600px) {
+        .lhead { display: none; }
+        #tab-parameters .section { padding: 16px 10px; }
+        .lrow { column-gap: 6px; padding: 3px 6px; min-height: 32px; }
+        .lrow.lread {
+            grid-template-columns: 38px minmax(0, 1fr) 6.4rem 50px 24px;
+            grid-template-areas: "time param val q menu" ". sub sub sub sub";
+        }
+        .lread .c-time { grid-area: time; } .lread .c-param { grid-area: param; } .lread .c-val { grid-area: val; text-align: left; }
+        .lread .c-q { grid-area: q; text-align: right; } .lread .c-menu { grid-area: menu; }
+        .lread .c-sub { grid-area: sub; display: block; font-size: 0.72rem; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -1px; }
+        .c-range, .c-unit, .c-method, .c-note { display: none; }
+        .m-unit { display: inline; font-family: 'Outfit', sans-serif; font-size: 0.7rem; opacity: 0.65; margin-left: 1px; }
+        .qb { font-size: 0.55rem; padding: 1px 3px; letter-spacing: 0.3px; }
+        .lrow.levent { grid-template-columns: 38px minmax(0, 1fr); }
+        .v-int { min-width: 3.5ch; }
+        .lrow.levent .c-event { white-space: normal; }
+        .ev-note { display: block; margin-left: 0; }
+    }
+
     @media (max-width: 520px) {
         .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
         .tile-groups { gap: 8px; }
@@ -469,12 +549,9 @@
             </div>
         </form>
 
-        <div class="list-toolbar">
-            <select id="readings-filter" class="form-control" onchange="loadReadings()">
-                <option value="">All parameters</option>
-                {% for k, p in parameters.items() %}<option value="{{ k }}">{{ p[0] }}</option>{% endfor %}
-            </select>
-        </div>
+        <h2 class="section-title log-title">Log</h2>
+        <div id="log-chips" class="chips" role="group" aria-label="Filter by parameter"></div>
+        <div class="lhead" aria-hidden="true"><span>Time</span><span>Parameter</span><span class="c-val">Value</span><span>Range</span><span>Unit</span><span>Method</span><span>Quality</span><span>Note</span><span></span></div>
         <div id="readings-log" class="log-container"><p class="empty-note">Loading…</p></div>
     </div>
 </div>
@@ -1034,44 +1111,120 @@
         }
     }
 
-    let readingsCache = {};
+    // ---- Session log: one table per day; a session's time shows on its first row ----
+    let readingsCache = {}, logDays = [], logFilter = '';
+    const EVENT_ICONS = { water_change: '💧', co2_bubble_rate: '🫧', fertilizer_dose: '🧪', dose: '🧪', ammonia_dose: '🧪',
+        livestock_added: '🐟', filter_seeded: '🦠', cycle_complete: '✅', drop_checker_refill: '🟢', equipment: '⚙️',
+        filter_clean: '🧽', glass_clean: '🧽', gravel_vacuum: '🧽', plant_trim: '✂️', task_completed: '☑️', other: '•' };
+    const pname = k => (PARAMS[k] || [k])[0];
+    const punit = k => { const u = (PARAMS[k] || [k, ''])[1]; return u === 'pH' ? '' : u; };
+    function valueCell(v) {          // split at the decimal point so decimals line up down the column
+        const t = num(v), i = t.indexOf('.');
+        return `<span class="v-int">${i < 0 ? t : t.slice(0, i)}</span><span class="v-frac">${i < 0 ? '' : t.slice(i)}</span>`;
+    }
+    const rangeText = r => (r.value_min !== null || r.value_max !== null) ? `${num(r.value_min)}–${num(r.value_max)}` : '';
+    const qBadge = q => q === 'ok' ? '' : `<span class="qb qb-${esc(q)}">${q === 'suspect' ? 'SUSPECT' : 'BAD'}</span>`;
+
     async function loadReadings() {
-        const filter = document.getElementById('readings-filter').value;
-        const qs = filter ? `?parameter=${encodeURIComponent(filter)}` : '?limit=300';
         const container = document.getElementById('readings-log');
         try {
-            const rows = await api(`/api/aquarium/${currentAquariumId}/readings${qs}`);
-            readingsCache = Object.fromEntries(rows.map(r => [r.id, r]));
-            if (!rows.length) { container.innerHTML = '<p class="empty-note">No readings recorded yet.</p>'; return; }
-            let html = '', day = null;
-            for (const r of rows) {
-                const d = r.timestamp.slice(0, 10);
-                if (d !== day) { html += `<div class="day-header">${fmtDay(d)}</div>`; day = d; }
-                html += readingLine(r);
-            }
-            container.innerHTML = html;
+            logDays = (await api(`/api/aquarium/${currentAquariumId}/log`)).days;
         } catch (e) {
-            container.innerHTML = '<p class="empty-note">Failed to load readings.</p>';
+            container.innerHTML = '<p class="empty-note">Failed to load the log.</p>'; return;
         }
+        readingsCache = {};
+        for (const d of logDays) for (const it of d.items)
+            if (it.kind === 'session') for (const r of it.readings) readingsCache[r.id] = r;
+        renderChips();
+        renderLog();
     }
-    function readingLine(r) {
-        const p = PARAMS[r.parameter] || [r.parameter, ''];
-        return `
-            <div class="entry q-${esc(r.quality)}" id="reading-${r.id}">
-                <span class="entry-time">${r.time_known ? splitTs(r.timestamp).time : '—'}</span>
-                <span class="entry-main"><strong>${esc(p[0])}</strong> ${fmtValue(r, p[1])} ${qualityBadge(r.quality)}
-                    ${r.method ? `<span class="entry-method">${esc(r.method)}</span>` : ''}
-                    ${r.notes ? `<div class="entry-notes">${esc(r.notes)}</div>` : ''}</span>
-                <span class="entry-actions">
-                    <button class="btn btn-small btn-secondary" onclick="editReading(${r.id})">Edit</button>
-                    <button class="btn btn-small btn-danger" onclick="deleteReading(${r.id})">Delete</button>
-                </span>
-            </div>`;
+    function renderChips() {
+        const present = new Set(Object.values(readingsCache).map(r => r.parameter));
+        if (logFilter && !present.has(logFilter)) logFilter = '';
+        const chips = [['', 'All'], ...PARAM_ORDER.filter(k => present.has(k)).map(k => [k, pname(k)])];
+        document.getElementById('log-chips').innerHTML = chips.map(([k, label]) =>
+            `<button type="button" class="chip${k === logFilter ? ' active' : ''}" aria-pressed="${k === logFilter}"
+                onclick="setLogFilter('${k}')">${esc(label)}</button>`).join('');
     }
+    function setLogFilter(k) { logFilter = k; renderChips(); renderLog(); }
+
+    function readingRow(r, session, first, note) {
+        const time = first ? (session.time_known ? session.time : '—') : '';
+        const range = rangeText(r), unit = punit(r.parameter);
+        const sub = [range && `(${range})`, r.method, note].filter(Boolean).map(esc).join(' · ');
+        return `<div class="lrow lread q-${esc(r.quality)}${first ? ' sfirst' : ''}" id="reading-${r.id}">
+            <span class="c-time">${time}</span>
+            <span class="c-param">${esc(pname(r.parameter))}</span>
+            <span class="c-val">${valueCell(r.value)}<span class="m-unit">${esc(unit)}</span></span>
+            <span class="c-range">${range}</span>
+            <span class="c-unit">${esc(unit)}</span>
+            <span class="c-method" title="${esc(r.method)}">${esc(r.method)}</span>
+            <span class="c-q">${qBadge(r.quality)}</span>
+            <span class="c-note" title="${esc(note)}">${esc(note)}</span>
+            ${sub ? `<span class="c-sub">${sub}</span>` : ''}
+            <span class="c-menu"><button type="button" class="menu-btn" aria-haspopup="menu"
+                aria-label="Actions for ${esc(pname(r.parameter))} ${num(r.value)}" onclick="toggleRowMenu(${r.id}, event)">⋯</button></span>
+        </div>`;
+    }
+    function eventRow(e) {
+        const unit = e.unit === '%' ? '%' : (e.unit ? ' ' + e.unit : '');
+        const value = e.value !== null ? ` <strong>${num(e.value)}${esc(unit)}</strong>` : '';
+        return `<div class="lrow levent ev-${esc(e.type)}">
+            <span class="c-time">${e.time_known ? e.time : '—'}</span>
+            <span class="c-event"><span class="ev-icon" aria-hidden="true">${EVENT_ICONS[e.type] || '•'}</span>${esc(e.label)}${value}${
+                e.notes ? `<span class="ev-note">${esc(e.notes)}</span>` : ''}</span>
+        </div>`;
+    }
+    function renderLog() {
+        const container = document.getElementById('readings-log');
+        const keep = r => !logFilter || r.parameter === logFilter;
+        let html = '';
+        for (const d of logDays) {
+            const visible = d.items.some(it => it.kind === 'session' && it.readings.some(keep));
+            if (!visible && (logFilter || !d.items.length)) continue;     // filtered out: hide the day
+            let rows = '';
+            for (const it of d.items) {
+                if (it.kind === 'event') { rows += eventRow(it); continue; }
+                it.readings.filter(keep).forEach((r, i) => {
+                    const note = it.shared_note ? (i === 0 ? it.shared_note : '') : (r.notes || '');
+                    rows += readingRow(r, it, i === 0, note);
+                });
+            }
+            html += `<section class="log-day"><h3>${fmtDay(d.date)}</h3><div class="ltable">${rows}</div></section>`;
+        }
+        container.innerHTML = html || `<p class="empty-note">${logDays.length ? 'Nothing for this filter.' : 'No readings recorded yet.'}</p>`;
+    }
+
+    // ⋯ menu: Edit / Delete, delete confirmed inline
+    function closeRowMenus() {
+        document.querySelectorAll('.row-menu').forEach(m => m.remove());
+        document.querySelectorAll('.lrow.menu-open').forEach(r => r.classList.remove('menu-open'));
+    }
+    function toggleRowMenu(id, ev) {
+        ev.stopPropagation();
+        const row = document.getElementById(`reading-${id}`), open = row.classList.contains('menu-open');
+        closeRowMenus();
+        if (open) return;
+        row.classList.add('menu-open');
+        row.querySelector('.c-menu').insertAdjacentHTML('beforeend', `<div class="row-menu" role="menu" onclick="event.stopPropagation()">
+            <button type="button" role="menuitem" onclick="closeRowMenus(); editReading(${id})">Edit</button>
+            <button type="button" role="menuitem" class="danger" onclick="askDeleteReading(${id})">Delete…</button></div>`);
+        row.querySelector('.row-menu button').focus();
+    }
+    function askDeleteReading(id) {
+        const r = readingsCache[id], menu = document.querySelector(`#reading-${id} .row-menu`);
+        menu.innerHTML = `<div class="confirm-text">Delete ${esc(pname(r.parameter))} ${num(r.value)}?</div>
+            <button type="button" class="danger" onclick="deleteReading(${id})">Delete</button>
+            <button type="button" onclick="closeRowMenus()">Cancel</button>`;
+        menu.querySelector('.danger').focus();
+    }
+    document.addEventListener('click', closeRowMenus);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeRowMenus(); });
+
     function editReading(id) {
         const r = readingsCache[id], { date, time } = splitTs(r.timestamp);
         document.getElementById(`reading-${id}`).outerHTML = `
-            <div class="entry editing" id="reading-${id}">
+            <div class="entry editing lrow-edit" id="reading-${id}">
                 <div class="edit-grid">
                     <input type="date" class="form-control" id="er-date-${id}" value="${date}" aria-label="Date">
                     <input type="time" class="form-control" id="er-time-${id}" value="${r.time_known ? time : ''}" aria-label="Time">
@@ -1083,24 +1236,29 @@
                     <select class="form-control" id="er-quality-${id}" aria-label="Quality">${qualityOptions(r.quality)}</select>
                 </div>
                 <textarea class="form-control" id="er-notes-${id}" rows="2" placeholder="Note" aria-label="Note">${esc(r.notes)}</textarea>
+                <p class="edit-error" id="er-error-${id}" hidden></p>
                 <div class="form-buttons">
                     <button class="btn btn-small btn-primary" onclick="saveReading(${id})">Save</button>
-                    <button class="btn btn-small btn-secondary" onclick="loadReadings()">Cancel</button>
+                    <button class="btn btn-small btn-secondary" onclick="renderLog()">Cancel</button>
                 </div>
             </div>`;
+        document.getElementById(`er-value-${id}`).focus();
     }
     async function saveReading(id) {
         const g = f => document.getElementById(`er-${f}-${id}`).value;
         const data = { id, date: g('date'), time: g('time'), parameter: g('param'), value: g('value'),
                        value_min: g('min'), value_max: g('max'), method: g('method'), quality: g('quality'), notes: g('notes') };
         const result = await api(`/api/aquarium/${currentAquariumId}/readings`, 'PUT', data).catch(() => ({}));
-        if (result.success) loadReadings(); else alert(result.error || 'Failed to update reading');
+        if (result.success) return loadReadings();
+        const err = document.getElementById(`er-error-${id}`);
+        err.textContent = result.error || 'Failed to update reading'; err.hidden = false;
     }
     async function deleteReading(id) {
-        const r = readingsCache[id];
-        if (!confirm(`Delete ${(PARAMS[r.parameter] || [r.parameter])[0]} ${num(r.value)} from ${r.timestamp.replace('T', ' ')}?`)) return;
         const result = await api(`/api/aquarium/${currentAquariumId}/readings?id=${id}`, 'DELETE').catch(() => ({}));
-        if (result.success) loadReadings(); else alert(result.error || 'Failed to delete');
+        if (result.success) return loadReadings();
+        const menu = document.querySelector(`#reading-${id} .row-menu`);
+        if (menu) menu.innerHTML = `<div class="confirm-text">${esc(result.error || 'Failed to delete')}</div>
+            <button type="button" onclick="closeRowMenus()">Close</button>`;
     }
 
     // Events
@@ -1128,7 +1286,7 @@
             notes: document.getElementById('event-notes').value,
         };
         const result = await api(`/api/aquarium/${currentAquariumId}/events`, 'POST', data).catch(() => ({}));
-        if (result.success) { resetEventForm(); loadEvents(); }
+        if (result.success) { resetEventForm(); loadEvents(); loadReadings(); }
         else alert(result.error || 'Failed to log event');
     }
 
@@ -1184,13 +1342,13 @@
         const g = f => document.getElementById(`ee-${f}-${id}`).value;
         const data = { id, event_type: g('type'), value: g('value'), date: g('date'), time: g('time'), notes: g('notes') };
         const result = await api(`/api/aquarium/${currentAquariumId}/events`, 'PUT', data).catch(() => ({}));
-        if (result.success) loadEvents(); else alert(result.error || 'Failed to update event');
+        if (result.success) { loadEvents(); loadReadings(); } else alert(result.error || 'Failed to update event');
     }
     async function deleteEvent(id) {
         const e = eventsCache[id];
         if (!confirm(`Delete ${(EVENT_TYPES[e.event_type] || [e.event_type])[0]} from ${e.timestamp.replace('T', ' ')}?`)) return;
         const result = await api(`/api/aquarium/${currentAquariumId}/events?id=${id}`, 'DELETE').catch(() => ({}));
-        if (result.success) loadEvents(); else alert(result.error || 'Failed to delete');
+        if (result.success) { loadEvents(); loadReadings(); } else alert(result.error || 'Failed to delete');
     }
 
     // Charts: one per chart group, shared time axis, water changes as dashed lines
