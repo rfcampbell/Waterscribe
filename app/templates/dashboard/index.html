@@ -20,7 +20,8 @@
     .tank-meta-line a { color: var(--pearl); text-decoration: none; border-bottom: 1px dotted rgba(240, 244, 248, 0.4); }
     .tank-meta-line .sep { opacity: 0.5; margin: 0 4px; }
 
-    .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 24px; }
+    .tile-groups { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
     .tile {
         display: flex; flex-direction: column; gap: 3px; text-align: left; min-width: 0;
         padding: 10px 12px 8px; border-radius: 12px; cursor: pointer; font: inherit; color: var(--pearl);
@@ -45,13 +46,60 @@
     .tile.stale .tile-age { color: var(--sand); opacity: 1; }
     .spark { display: block; width: 100%; height: 30px; margin-top: 2px; overflow: visible; }
     .spark-empty { font-size: 0.68rem; opacity: 0.4; line-height: 30px; }
-    .spark-band { fill: rgba(78, 205, 196, 0.14); }
-    .spark-line { fill: none; stroke: rgba(240, 244, 248, 0.55); stroke-width: 1.5; }
-    .spark-dot { stroke: var(--pearl); stroke-width: 4; stroke-linecap: round; }
-    .spark-dot.suspect { stroke: var(--sand); }
+    .spark-band { fill: rgba(78, 205, 196, 0.16); }
+    .spark-line { fill: none; stroke: var(--seafoam); stroke-width: 2; stroke-linejoin: round; }
+    .spark-dot { stroke: var(--seafoam); stroke-width: 4.5; stroke-linecap: round; }
+    .tile.band-out .spark-line, .tile.band-out .spark-dot { stroke: var(--coral); }
+    .tile.band-out .spark-band { fill: rgba(255, 107, 157, 0.14); }
+    .spark-dot.suspect, .tile.band-out .spark-dot.suspect { stroke: var(--sand); }
+    .tile-message { font-size: 1rem; font-weight: 600; color: var(--sand); white-space: normal; padding: 4px 0 2px; }
+
+    .main-chart {
+        background: rgba(240, 244, 248, 0.04); border: 1px solid rgba(240, 244, 248, 0.1); border-radius: 14px;
+        padding: 12px 14px 10px; margin-bottom: 26px; scroll-margin-top: 12px;
+    }
+    .mc-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+    .mc-title { font-size: 1.05rem; font-weight: 600; }
+    .mc-title .mc-unit { font-weight: 400; opacity: 0.6; font-size: 0.85rem; margin-left: 4px; }
+    .mc-ranges { display: flex; gap: 4px; }
+    .mc-ranges button {
+        font: inherit; font-size: 0.8rem; color: var(--pearl); cursor: pointer; padding: 5px 10px; border-radius: 6px;
+        background: rgba(240, 244, 248, 0.05); border: 1px solid rgba(240, 244, 248, 0.12);
+    }
+    .mc-ranges button.active { background: var(--seafoam); color: var(--deep-ocean); border-color: transparent; }
+    .mc-box { position: relative; height: 280px; touch-action: pan-y; }
+    .mc-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0.6; pointer-events: none; }
+    .mc-empty[hidden], .mc-tip[hidden] { display: none; }
+    .mc-tip {
+        position: absolute; top: 4px; z-index: 2; pointer-events: none; max-width: 240px; min-width: 150px;
+        background: rgba(10, 22, 40, 0.94); border: 1px solid rgba(78, 205, 196, 0.45); border-radius: 8px;
+        padding: 7px 9px; font-size: 0.8rem; line-height: 1.35; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+    }
+    .mc-tip .tt-when { opacity: 0.7; font-size: 0.75rem; }
+    .mc-tip .tt-val { font-size: 1.05rem; font-weight: 700; }
+    .mc-tip .tt-val small { font-weight: 400; opacity: 0.7; font-size: 0.75rem; }
+    .mc-tip .tt-meta { opacity: 0.75; }
+    .mc-tip .tt-event { color: #93c5fd; margin-top: 3px; }
+    .mc-overview { position: relative; height: 44px; margin-top: 6px; border-radius: 6px; background: rgba(240, 244, 248, 0.03); touch-action: none; user-select: none; }
+    .mc-overview canvas { width: 100%; height: 100%; display: block; }
+    .ov-window {
+        position: absolute; top: 0; bottom: 0; cursor: grab; border-radius: 4px;
+        background: rgba(78, 205, 196, 0.16); border: 1px solid rgba(78, 205, 196, 0.6);
+    }
+    .ov-window:active { cursor: grabbing; }
+    .ov-handle { position: absolute; top: 0; bottom: 0; width: 18px; cursor: ew-resize; }
+    .ov-handle::after { content: ''; position: absolute; top: 12px; bottom: 12px; left: 7px; width: 4px; border-radius: 2px; background: var(--seafoam); }
+    .ov-handle[data-edge="l"] { left: -9px; }
+    .ov-handle[data-edge="r"] { right: -9px; }
+    .mc-foot { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 0.75rem; opacity: 0.7; margin-top: 6px; }
+    .mc-foot label { cursor: pointer; }
+    .lg-wc { color: #60a5fa; } .lg-ev { color: rgba(240, 244, 248, 0.5); }
 
     @media (max-width: 520px) {
         .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .tile-groups { gap: 8px; }
+        .main-chart { margin-left: -15px; margin-right: -15px; border-radius: 0; border-left: 0; border-right: 0; padding: 10px 10px 8px; }
+        .mc-box { height: 240px; }
         .tile-value { font-size: 1.4rem; }
         .tank-title { font-size: 1.25rem; }
         .btn-mini { padding: 7px 10px; }
@@ -317,32 +365,67 @@
     {% for d in sp.dots %}<path class="spark-dot{% if d.suspect %} suspect{% endif %}" d="M{{ d.x }} {{ d.y }}h0" vector-effect="non-scaling-stroke"/>{% endfor %}
 </svg>
 {%- endmacro %}
-{% macro hm(r) %}{{ r.timestamp.strftime('%H:%M') if r.time_known else r.timestamp.strftime('%b %-d') }}{% endmacro %}
-<div class="tiles" id="tiles">
-    {% for t in tiles %}
+{% macro when(r) %}{{ r.timestamp.strftime('%b %-d') }}{% if r.time_known %} {{ r.timestamp.strftime('%H:%M') }}{% endif %}{% endmacro %}
+<div class="tile-groups" id="tiles">
+    {% for group in tile_groups %}
+    <div class="tiles">
+    {% for t in group %}
+    {% if t.value is none %}
+    <button type="button" class="tile stale" data-key="{{ t.key }}" onclick="selectTile('{{ t.key }}')"
+            title="{{ t.label }}: {{ t.message }} (CO2 window {{ t.window[0].strftime('%H:%M') }}–{{ t.window[1].strftime('%H:%M') }})">
+        <div class="tile-head"><span class="tile-label">{{ t.label }}</span></div>
+        <div class="tile-value tile-message">{{ t.message }}</div>
+        <div class="tile-sub pairing">needs a pH taken {{ t.window[0].strftime('%H:%M') }}–{{ t.window[1].strftime('%H:%M') }} in the last 2 d and a degassed pH in the last 14 d</div>
+        {% if t.spark %}{{ spark_svg(t.spark) }}{% endif %}
+        {% if t.target %}<div class="tile-target">target {{ fmt_target(t.target) }}</div>{% endif %}
+    </button>
+    {% else %}
     <button type="button" class="tile{% if t.stale %} stale{% endif %}{% if t.band %} band-{{ t.band }}{% endif %}" data-key="{{ t.key }}" onclick="selectTile('{{ t.key }}')"
             title="{{ t.label }}: {{ t.timestamp.strftime('%Y-%m-%d' + (' %H:%M' if t.time_known else ' (time unknown)')) }}{% if t.stale %} — stale{% endif %}{% if t.suspect %} — flagged suspect{% endif %}">
         <div class="tile-head"><span class="tile-label">{{ t.label }}</span><span class="tile-age">{{ t.age }}</span></div>
         <div class="tile-value">{{ '%g' % t.value }}{% if t.unit %}<span class="tile-unit">{{ t.unit }}</span>{% endif %}{% if t.suspect %}<span class="tile-suspect" aria-label="suspect">⚠</span>{% endif %}
             {% if t.value_min is not none or t.value_max is not none %}<span class="tile-range">({{ '%g' % t.value_min if t.value_min is not none else '' }}–{{ '%g' % t.value_max if t.value_max is not none else '' }})</span>{% endif %}</div>
-        {% if t.key == 'co2_drop' %}
-        <div class="tile-sub pairing">{{ '%g' % t.pairing.degassed.value }} degassed {{ hm(t.pairing.degassed) }} − {{ '%g' % t.pairing.tank.value }} in tank {{ hm(t.pairing.tank) }}</div>
+        {% if t.pairing %}
+        <div class="tile-sub pairing">degassed {{ '%g' % t.pairing.degassed.value }} · {{ when(t.pairing.degassed) }}<br>in tank {{ '%g' % t.pairing.tank.value }} · {{ when(t.pairing.tank) }}</div>
         {% else %}
         <div class="tile-sub">{{ t.method or ' ' }}</div>
         {% endif %}
-        {% if t.spark %}{{ spark_svg(t.spark) }}{% else %}<div class="spark spark-empty">nothing in 30 d</div>{% endif %}
+        {% if t.spark %}{{ spark_svg(t.spark) }}{% elif not t.bubble %}<div class="spark spark-empty">nothing in 30 d</div>{% endif %}
         {% if t.target %}<div class="tile-target">target {{ fmt_target(t.target) }}</div>{% endif %}
     </button>
-    {% endfor %}
-    {% if last_bubble %}
-    <button type="button" class="tile" data-key="co2_bubble_rate" onclick="selectTile('co2_bubble_rate')" title="CO2 bubble rate setting">
-        <div class="tile-head"><span class="tile-label">CO2 bubble rate</span><span class="tile-age">set {{ last_bubble_age }}</span></div>
-        <div class="tile-value">{{ '%g' % last_bubble.value }}<span class="tile-unit">/30s</span></div>
-        <div class="tile-sub">{{ last_bubble.notes or ' ' }}</div>
-    </button>
     {% endif %}
-    {% if not tiles and not last_bubble %}<p class="empty-note">No readings for this tank yet.</p>{% endif %}
+    {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-note">No readings for this tank yet.</p>
+    {% endfor %}
 </div>
+
+<!-- Main chart: the selected tile's parameter -->
+<section class="main-chart" id="main-chart" aria-label="Selected parameter chart">
+    <div class="mc-head">
+        <h2 class="mc-title" id="mc-title">&nbsp;</h2>
+        <div class="mc-ranges" role="group" aria-label="Time range">
+            <button type="button" data-days="7">7 d</button>
+            <button type="button" data-days="30" class="active">30 d</button>
+            <button type="button" data-days="90">90 d</button>
+            <button type="button" data-days="0">All</button>
+        </div>
+    </div>
+    <div class="mc-box" id="mc-box">
+        <canvas id="mc-canvas"></canvas>
+        <div class="mc-tip" id="mc-tip" hidden></div>
+        <p class="mc-empty" id="mc-empty" hidden></p>
+    </div>
+    <div class="mc-overview" id="mc-overview" title="Drag the window to move, its edges to resize">
+        <canvas id="mc-ov-canvas"></canvas>
+        <div class="ov-window" id="ov-window"><span class="ov-handle" data-edge="l"></span><span class="ov-handle" data-edge="r"></span></div>
+    </div>
+    <div class="mc-foot">
+        <label><input type="checkbox" id="mc-bad"> show bad readings</label>
+        <span class="mc-legend">○ suspect · <span class="lg-wc">┆</span> water change · <span class="lg-ev">│</span> other event · shaded = target</span>
+    </div>
+</section>
 
 <!-- Tabs -->
 <div class="tabs">
@@ -534,6 +617,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/mainchart.js') }}"></script>
 <script>
     let chart = null;
     const currentAquariumId = {{ selected_aquarium.id }};
@@ -566,9 +650,10 @@
     // Tile selection (drives the main chart); remembered per tank in this browser
     const SEL_KEY = `ws_sel_${currentAquariumId}`;
     function store(fn) { try { return fn(); } catch (e) { return null; } }
-    function selectTile(key) {
+    function selectTile(key, scroll = true) {
         document.querySelectorAll('.tile').forEach(t => t.classList.toggle('selected', t.dataset.key === key));
         store(() => localStorage.setItem(SEL_KEY, key));
+        MainChart.show(key, { scroll });
     }
     function initialTile() {
         const keys = [...document.querySelectorAll('.tile')].map(t => t.dataset.key);
@@ -1209,8 +1294,10 @@
         lists.id = 'method-lists';
         lists.innerHTML = methodDatalists();
         document.body.appendChild(lists);
+        MainChart.init(currentAquariumId);
         const first = initialTile();
-        if (first) selectTile(first);
+        if (first) selectTile(first, false);
+        else document.getElementById('main-chart').hidden = true;
         resetReadingsForm();
         resetEventForm();
         loadReadings();

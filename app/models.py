@@ -10,6 +10,7 @@ db = SQLAlchemy()
 class Aquarium(db.Model):
     """Aquarium model"""
     __tablename__ = 'aquariums'
+    __table_args__ = (db.CheckConstraint('(co2_on IS NULL) = (co2_off IS NULL)', name='ck_aquariums_co2_window_pair'),)
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -18,6 +19,8 @@ class Aquarium(db.Model):
     volume_gallons = db.Column(db.Float)
     description = db.Column(db.Text)
     sort_order = db.Column(db.Integer, nullable=False, default=0, server_default='0')  # tank switcher order
+    co2_on = db.Column(db.Time)    # daily CO2 window, local time; both set or neither (CO2 pH drop tile)
+    co2_off = db.Column(db.Time)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships

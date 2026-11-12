@@ -450,6 +450,21 @@ def chart_data(aquarium_id):
                             for e in co2],
     })
 
+@bp.route('/aquarium/<int:aquarium_id>/series')
+def tile_series(aquarium_id):
+    """Main chart on the Parameters page: one tile key (a parameter, co2_drop or co2_bubble_rate),
+    all time, with the tank's events and target. Read-only; not used by the MCP server."""
+    from app.overview import series
+    from app.targets import targets_for
+    aquarium = get_aquarium(aquarium_id)
+    if not aquarium:
+        return _err('Aquarium not found', 404)
+    key = request.args.get('key', '')
+    readings = Reading.query.filter_by(aquarium_id=aquarium_id).all()
+    events = Event.query.filter_by(aquarium_id=aquarium_id).all()
+    out = series(key, readings, events, targets_for(aquarium_id), (aquarium.co2_on, aquarium.co2_off))
+    return jsonify(out) if out else _err(f'unknown key {key!r}')
+
 def latest_readings(aquarium_id):
     """Most recent non-bad reading per parameter: {parameter: Reading}."""
     sub = db.session.query(Reading.parameter, db.func.max(Reading.timestamp).label('ts')).filter(

@@ -111,6 +111,10 @@ CO2_DROP_LABEL = 'CO2 pH drop'
 TARGET_KEYS = {**{k: p[0] for k, p in PARAMETERS.items()}, CO2_DROP: CO2_DROP_LABEL}
 TARGET_RANGES = {**RANGES, CO2_DROP: (0, 3)}   # plausibility for target min/max
 
-# Tile order on the Parameters page: the ones checked most first, then catalog order.
-TILE_ORDER = ['ec', 'nitrate', 'ph', CO2_DROP, 'ph_degassed', 'kh', 'gh', 'temperature', 'tds',
-              'ammonia', 'nitrite', 'phosphate', 'potassium', 'iron']
+# Tiles on the Parameters page, in fixed groups (each group starts a new row).
+# 'co2_bubble_rate' is the bubble-rate event's latest setting.
+TILE_GROUPS = [
+    ['ec', 'nitrate', 'phosphate', 'potassium', 'iron'],
+    ['kh', 'gh', 'ammonia', 'nitrite', 'tds', 'temperature'],
+    ['ph', CO2_DROP, 'ph_degassed', 'co2_bubble_rate'],
+]

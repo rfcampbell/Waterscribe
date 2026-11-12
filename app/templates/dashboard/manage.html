@@ -91,6 +91,8 @@
         gap: 10px;
     }
 
+    .co2-grid { grid-template-columns: repeat(2, minmax(0, 200px)); }
+    .hint { font-weight: 400; opacity: 0.6; font-size: 0.85em; }
     .targets { margin-top: 14px; }
     .targets summary { cursor: pointer; font-size: 0.9rem; opacity: 0.85; }
     .targets-summary { font-size: 0.8rem; opacity: 0.65; margin-left: 6px; }
@@ -136,6 +138,7 @@
             <div class="tank-meta">
                 {% if a.code %}<span class="tank-code">{{ a.code }}</span> &middot; {% endif %}{{ a.type or 'No type set' }}
                 &middot; {% if a.volume_gallons is not none %}{{ '%g' % a.volume_gallons }} gal{% else %}Volume not set{% endif %}
+                {% if a.co2_on %}&middot; CO2 {{ a.co2_on.strftime('%H:%M') }}–{{ a.co2_off.strftime('%H:%M') }}{% endif %}
                 &middot; {{ c.readings }} readings, {{ c.events }} events, {{ c.tasks }} tasks, {{ c.fish }} fish entries
             </div>
             {% if a.description %}<div class="tank-desc">{{ a.description }}</div>{% endif %}
@@ -171,6 +174,16 @@
             <div class="form-group">
                 <label class="form-label" for="order-{{ a.id }}">Order</label>
                 <input class="form-control" id="order-{{ a.id }}" name="sort_order" type="number" step="1" value="{{ a.sort_order }}" title="Position in the tank switcher (lowest first)">
+            </div>
+        </div>
+        <div class="form-grid co2-grid">
+            <div class="form-group">
+                <label class="form-label" for="co2on-{{ a.id }}">CO2 on <span class="hint">(daily, blank = no CO2)</span></label>
+                <input class="form-control" id="co2on-{{ a.id }}" name="co2_on" type="time" value="{{ a.co2_on.strftime('%H:%M') if a.co2_on else '' }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="co2off-{{ a.id }}">CO2 off</label>
+                <input class="form-control" id="co2off-{{ a.id }}" name="co2_off" type="time" value="{{ a.co2_off.strftime('%H:%M') if a.co2_off else '' }}">
             </div>
         </div>
         <div class="form-group">

@@ -1,10 +1,11 @@
 """Tiles, staleness and CO2 pH-drop pairing. Pure functions, no DB:
 venv/bin/python -m unittest tests.test_overview -v"""
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from types import SimpleNamespace
 
-from app.overview import age_text, is_stale, band_state, co2_pairs, build_tiles, spark
+from app.overview import (age_text, is_stale, band_state, build_tiles, spark, in_window,
+                          co2_drop_at, co2_series, series)
 
 NOW = datetime(2026, 11, 11, 20, 0)
 _ids = iter(range(1, 10_000))
@@ -17,6 +18,10 @@ def R(param, value, ts, quality='ok', time_known=True, method=None, vmin=None, v
 
 def ago(**kw):
     return NOW - timedelta(**kw)
+
+
+def flat(groups):
+    return [t for g in groups for t in g]
 
 
 class Staleness(unittest.TestCase):
@@ -43,7 +48,7 @@ class Staleness(unittest.TestCase):
         self.assertEqual(age_text(datetime(2026, 11, 8, 12), False, NOW), '3 d ago')
 
     def test_stale_tile_flag(self):
-        tiles = build_tiles([R('ec', 300, ago(days=3)), R('nitrate', 15, ago(days=3))], {}, NOW)
+        tiles = flat(build_tiles([R('ec', 300, ago(days=3)), R('nitrate', 15, ago(days=3))], {}, NOW))
         self.assertEqual({t['key']: t['stale'] for t in tiles}, {'ec': True, 'nitrate': False})
 
 
@@ -60,21 +65,24 @@ class Band(unittest.TestCase):
 class Latest(unittest.TestCase):
     def test_bad_ignored_suspect_flagged(self):
         rs = [R('ec', 300, ago(days=1)), R('ec', 9999, ago(hours=1), quality='bad')]
-        t = build_tiles(rs, {}, NOW)[0]
+        t = flat(build_tiles(rs, {}, NOW))[0]
         self.assertEqual((t['value'], t['suspect']), (300, False))
         rs.append(R('ec', 310, ago(hours=2), quality='suspect'))
-        t = build_tiles(rs, {}, NOW)[0]
+        t = flat(build_tiles(rs, {}, NOW))[0]
         self.assertEqual((t['value'], t['suspect']), (310, True))
 
     def test_only_bad_readings_gives_no_tile(self):
         self.assertEqual(build_tiles([R('ec', 300, ago(days=1), quality='bad')], {}, NOW), [])
 
-    def test_tile_order_and_band(self):
-        rs = [R('ph', 6.8, ago(days=1)), R('nitrate', 30, ago(days=1)), R('ec', 300, ago(days=1))]
-        tiles = build_tiles(rs, {'nitrate': (10, 20)}, NOW)
-        self.assertEqual([t['key'] for t in tiles], ['ec', 'nitrate', 'ph'])
-        self.assertEqual(tiles[1]['band'], 'out')
-        self.assertIsNone(tiles[0]['band'])
+    def test_tile_groups_and_band(self):
+        rs = [R(k, 1, ago(days=1)) for k in ('ph', 'temperature', 'kh', 'iron', 'nitrate', 'ec', 'ph_degassed')]
+        rs.append(R('nitrate', 30, ago(hours=1)))
+        bubble = SimpleNamespace(value=30, timestamp=ago(days=1), time_known=True, notes=None)
+        groups = build_tiles(rs, {'nitrate': (10, 20)}, NOW, bubble=bubble)
+        self.assertEqual([[t['key'] for t in g] for g in groups],
+                         [['ec', 'nitrate', 'iron'], ['kh', 'temperature'], ['ph', 'ph_degassed', 'co2_bubble_rate']])
+        self.assertEqual(groups[0][1]['band'], 'out')
+        self.assertIsNone(groups[0][0]['band'])
 
     def test_spark_window_and_band(self):
         self.assertIsNone(spark([R('ec', 1, ago(days=40))], NOW))
@@ -91,52 +99,117 @@ class Latest(unittest.TestCase):
         self.assertEqual((min(ys), max(ys)), (3, 29))    # ok points span the full box
 
 
-class Co2Pairing(unittest.TestCase):
-    day = datetime(2026, 11, 10)
+WIN = (time(4, 45), time(13, 45))   # 100P's window
 
-    def at(self, h, m=0):
-        return self.day.replace(hour=h, minute=m)
 
-    def test_nearest_same_day(self):
-        deg = R('ph_degassed', 7.6, self.at(9))
-        rs = [deg, R('ph', 6.4, self.at(7)), R('ph', 6.6, self.at(9, 20)), R('ph', 6.5, self.at(15))]
-        [p] = co2_pairs(rs)
-        self.assertIs(p.degassed, deg)
-        self.assertEqual(p.tank.value, 6.6)
-        self.assertEqual(p.value, 1.0)
+class Co2Drop(unittest.TestCase):
+    """drop = latest ok degassed pH within 14 d - latest ok in-tank pH inside the CO2 window within 2 d."""
 
-    def test_tie_goes_to_earlier(self):
-        rs = [R('ph_degassed', 7.5, self.at(10)), R('ph', 6.6, self.at(11)), R('ph', 6.5, self.at(9))]
-        self.assertEqual(co2_pairs(rs)[0].tank.value, 6.5)
+    def drop(self, rs, at=NOW, window=WIN):
+        return co2_drop_at(rs, *window, at)
 
-    def test_other_days_never_pair(self):
-        rs = [R('ph_degassed', 7.5, self.at(0, 5)), R('ph', 6.5, self.day - timedelta(minutes=10))]
-        self.assertEqual(co2_pairs(rs), [])
+    def tile(self, rs, window=WIN, targets=None):
+        return next((t for t in flat(build_tiles(rs, targets or {}, NOW, window)) if t['key'] == 'co2_drop'), None)
 
-    def test_bad_skipped_on_either_side(self):
-        rs = [R('ph_degassed', 7.5, self.at(9)), R('ph', 6.0, self.at(9), quality='bad'), R('ph', 6.5, self.at(12))]
-        self.assertEqual(co2_pairs(rs)[0].tank.value, 6.5)
-        rs = [R('ph_degassed', 7.5, self.at(9), quality='bad'), R('ph', 6.5, self.at(9))]
-        self.assertEqual(co2_pairs(rs), [])
+    def test_window_membership(self):
+        on, off = WIN
+        self.assertTrue(in_window(datetime(2026, 11, 11, 4, 45), on, off))     # on is inclusive
+        self.assertFalse(in_window(datetime(2026, 11, 11, 13, 45), on, off))   # off is exclusive
+        self.assertFalse(in_window(datetime(2026, 11, 11, 4, 44), on, off))
+        # a window that crosses midnight
+        self.assertTrue(in_window(datetime(2026, 11, 11, 23, 0), time(22), time(6)))
+        self.assertTrue(in_window(datetime(2026, 11, 11, 5, 59), time(22), time(6)))
+        self.assertFalse(in_window(datetime(2026, 11, 11, 12, 0), time(22), time(6)))
 
-    def test_suspect_and_time_unknown_carry_through(self):
-        rs = [R('ph_degassed', 7.5, self.at(12), time_known=False), R('ph', 6.5, self.at(9), quality='suspect')]
-        [p] = co2_pairs(rs)
-        self.assertEqual((p.quality, p.time_known), ('suspect', False))
+    def test_picks_latest_in_window_not_latest_overall(self):
+        deg = R('ph_degassed', 7.4, ago(days=3))
+        inside = R('ph', 6.4, NOW.replace(hour=10))           # 10:00, in window
+        later_outside = R('ph', 7.1, NOW.replace(hour=18))    # 18:00, CO2 off: must be ignored
+        d, t = self.drop([deg, inside, later_outside])
+        self.assertIs(d, deg)
+        self.assertIs(t, inside)
+        self.assertEqual(self.tile([deg, inside, later_outside])['value'], 1.0)
 
-    def test_tile_shows_pairing_and_goes_stale_not_hidden(self):
-        old = NOW - timedelta(days=20)
-        rs = [R('ph_degassed', 7.4, old), R('ph', 6.4, old.replace(hour=8))]
-        [t] = [t for t in build_tiles(rs, {'co2_drop': (0.9, 1.1)}, NOW) if t['key'] == 'co2_drop']
-        self.assertEqual(t['value'], 1.0)
-        self.assertEqual(t['band'], 'in')
+    def test_unknown_time_ph_never_counts_as_in_window(self):
+        rs = [R('ph_degassed', 7.4, ago(days=1)), R('ph', 6.4, NOW.replace(hour=12), time_known=False)]
+        self.assertIsNone(self.drop(rs)[1])
+
+    def test_suspect_and_bad_excluded_on_both_sides(self):
+        deg_ok = R('ph_degassed', 7.4, ago(days=5))
+        deg_sus = R('ph_degassed', 7.9, ago(days=1), quality='suspect')
+        tank_ok = R('ph', 6.4, NOW.replace(hour=8))
+        tank_bad = R('ph', 5.0, NOW.replace(hour=11), quality='bad')
+        tank_sus = R('ph', 6.0, NOW.replace(hour=12), quality='suspect')
+        d, t = self.drop([deg_ok, deg_sus, tank_ok, tank_bad, tank_sus])
+        self.assertIs(d, deg_ok)
+        self.assertIs(t, tank_ok)
+
+    def test_two_day_limit_on_tank_ph(self):
+        deg = R('ph_degassed', 7.4, datetime(2026, 11, 9, 6, 0))
+        tank = R('ph', 6.4, datetime(2026, 11, 9, 10, 0))                 # in window
+        self.assertIs(self.drop([deg, tank], at=datetime(2026, 11, 11, 9, 59))[1], tank)   # 1 d 23:59 later
+        self.assertIsNone(self.drop([deg, tank], at=datetime(2026, 11, 11, 10, 1))[1])     # 2 d 00:01 later
+
+    def test_fourteen_day_limit_on_degassed(self):
+        tank = R('ph', 6.4, NOW.replace(hour=10))
+        self.assertIsNotNone(self.drop([tank, R('ph_degassed', 7.4, ago(days=13, hours=23))])[0])
+        self.assertIsNone(self.drop([tank, R('ph_degassed', 7.4, ago(days=14, minutes=1))])[0])
+
+    def test_no_in_window_ph_shows_message_not_number(self):
+        rs = [R('ph_degassed', 7.4, ago(days=1)), R('ph', 7.0, NOW.replace(hour=19))]
+        t = self.tile(rs)
+        self.assertIsNone(t['value'])
+        self.assertEqual(t['message'], 'no in-window pH')
         self.assertTrue(t['stale'])
-        self.assertEqual(t['pairing'].tank.value, 6.4)
 
-    def test_no_tile_when_pairing_older_than_90_days(self):
-        old = NOW - timedelta(days=91)
-        rs = [R('ph_degassed', 7.4, old), R('ph', 6.4, old)]
-        self.assertNotIn('co2_drop', [t['key'] for t in build_tiles(rs, {}, NOW)])
+    def test_no_recent_degassed_says_so(self):
+        t = self.tile([R('ph', 6.4, NOW.replace(hour=10)), R('ph_degassed', 7.4, ago(days=30))])
+        self.assertIsNone(t['value'])
+        self.assertIn('no degassed pH', t['message'])
+
+    def test_null_window_means_no_tile(self):
+        rs = [R('ph_degassed', 7.4, ago(days=1)), R('ph', 6.4, NOW.replace(hour=10))]
+        self.assertIsNone(self.tile(rs, window=None))
+        self.assertIsNone(self.tile(rs, window=(None, None)))
+        self.assertIsNone(self.tile([], window=None))
+        self.assertEqual(self.tile([], window=WIN)['message'], 'no in-window pH')   # window set: tile even without data
+
+    def test_tile_carries_both_readings_and_band(self):
+        deg, tank = R('ph_degassed', 7.45, ago(days=2)), R('ph', 6.45, NOW.replace(hour=9))
+        t = self.tile([deg, tank], targets={'co2_drop': (0.9, 1.1)})
+        self.assertEqual((t['pairing'].degassed, t['pairing'].tank), (deg, tank))
+        self.assertEqual((t['value'], t['band']), (1.0, 'in'))
+
+    def test_series_follows_the_rule_over_time(self):
+        d1 = R('ph_degassed', 7.4, datetime(2026, 11, 1, 12))
+        p1 = R('ph', 6.4, datetime(2026, 11, 2, 9))
+        p_off = R('ph', 7.2, datetime(2026, 11, 2, 20))      # outside window: no new point
+        d2 = R('ph_degassed', 7.6, datetime(2026, 11, 3, 7))
+        rs = [d1, p1, p_off, d2]
+        self.assertEqual([(p.value, p.timestamp) for p in co2_series(rs, *WIN)],
+                         [(1.0, p1.timestamp), (1.2, d2.timestamp)])
+        out = series('co2_drop', rs, [], {}, WIN)
+        self.assertEqual(out['points'][1]['pair']['degassed']['y'], 7.6)
+        self.assertEqual(series('co2_drop', rs, [], {}, None)['points'], [])
+
+
+class Series(unittest.TestCase):
+    def test_parameter_series_includes_bad_and_events(self):
+        rs = [R('ec', 300, ago(days=2)), R('ec', 999, ago(days=1), quality='bad'), R('kh', 4, ago(days=1))]
+        ev = [SimpleNamespace(timestamp=ago(days=3), time_known=True, event_type='water_change', value=50, notes=None)]
+        out = series('ec', rs, ev, {'ec': (280, 320)}, None)
+        self.assertEqual([p['quality'] for p in out['points']], ['ok', 'bad'])
+        self.assertEqual(out['events'][0]['label'], 'Water change')
+        self.assertEqual(out['events'][0]['unit'], '%')
+        self.assertEqual(out['target'], (280, 320))
+        self.assertIsNone(series('nonesuch', rs, ev, {}, None))
+
+    def test_bubble_rate_is_a_step_series_from_events(self):
+        ev = [SimpleNamespace(timestamp=ago(days=3), time_known=True, event_type='co2_bubble_rate', value=30, notes='x'),
+              SimpleNamespace(timestamp=ago(days=2), time_known=True, event_type='water_change', value=50, notes=None)]
+        out = series('co2_bubble_rate', [], ev, {}, None)
+        self.assertTrue(out['step'])
+        self.assertEqual([p['y'] for p in out['points']], [30])
 
 
 if __name__ == '__main__':

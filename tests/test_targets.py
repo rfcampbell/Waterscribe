@@ -30,7 +30,9 @@ class Targets(unittest.TestCase):
 
     def tearDown(self):
         with self.app.app_context():
-            self.Aquarium.query.filter(self.Aquarium.name.like('test-tank-%')).delete()
+            # ORM delete so readings/targets cascade (a bulk delete would hit the readings FK)
+            for a in self.Aquarium.query.filter(self.Aquarium.name.like('test-tank-%')):
+                self.db.session.delete(a)
             self.db.session.commit()
 
     def put(self, targets):
@@ -99,6 +101,30 @@ class Targets(unittest.TestCase):
         self.assertIn(f'ws_tank={self.tid}', r.headers.get('Set-Cookie', ''))
         page = self.c.get('/').get_data(as_text=True)          # test client keeps the cookie
         self.assertIn('aria-current="page">TT1</a>', page.replace('\n', '').replace('  ', ''))
+
+    def test_co2_window_edit(self):
+        edit = lambda **d: self.c.post(f'/aquarium/{self.tid}/edit', json=d)
+        self.assertTrue(edit(co2_on='04:45', co2_off='13:45').get_json()['success'])
+        with self.app.app_context():
+            a = self.db.session.get(self.Aquarium, self.tid)
+            self.assertEqual((str(a.co2_on), str(a.co2_off)), ('04:45:00', '13:45:00'))
+        for bad, msg in (({'co2_on': '05:00', 'co2_off': ''}, 'both'), ({'co2_on': '5pm', 'co2_off': '06:00'}, 'HH:MM'),
+                         ({'co2_on': '06:00', 'co2_off': '06:00'}, 'same')):
+            with self.subTest(bad=bad):
+                r = edit(**bad)
+                self.assertEqual(r.status_code, 400)
+                self.assertIn(msg, r.get_json()['error'])
+        edit(co2_on='', co2_off='')                     # clearing both removes the window
+        with self.app.app_context():
+            self.assertIsNone(self.db.session.get(self.Aquarium, self.tid).co2_on)
+
+    def test_series_endpoint(self):
+        self.c.post(f'/api/aquarium/{self.tid}/readings', json={'readings': [{'parameter': 'ec', 'value': 300}]})
+        out = self.c.get(f'/api/aquarium/{self.tid}/series?key=ec').get_json()
+        self.assertEqual([p['y'] for p in out['points']], [300])
+        self.assertEqual(self.c.get(f'/api/aquarium/{self.tid}/series?key=co2_drop').get_json()['points'], [])
+        self.assertEqual(self.c.get(f'/api/aquarium/{self.tid}/series?key=nope').status_code, 400)
+        self.assertEqual(self.c.get('/api/aquarium/999999/series?key=ec').status_code, 404)
 
 
 if __name__ == '__main__':

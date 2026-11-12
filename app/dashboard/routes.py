@@ -2,7 +2,7 @@
 Dashboard routes - main UI and aquarium management
 """
 import re
-from datetime import datetime
+from datetime import datetime, time
 from app.utils import parse_number
 from flask import render_template, redirect, url_for, flash, request, jsonify, make_response
 
@@ -57,13 +57,8 @@ def index():
     ).scalar() or 0
     
     targets = targets_for(selected_aquarium.id)
-    tiles = build_tiles(Reading.query.filter_by(aquarium_id=selected_aquarium.id).all(), targets,
-                        datetime.now())
-    if last_bubble:
-        from app.overview import age_text
-        last_bubble_age = age_text(last_bubble.timestamp, last_bubble.time_known, datetime.now())
-    else:
-        last_bubble_age = None
+    tile_groups = build_tiles(Reading.query.filter_by(aquarium_id=selected_aquarium.id).all(), targets,
+                              datetime.now(), (selected_aquarium.co2_on, selected_aquarium.co2_off), last_bubble)
     next_task = next((t for t in upcoming_tasks if t.next_due), upcoming_tasks[0] if upcoming_tasks else None)
 
     resp = make_response(render_template('dashboard/index.html',
@@ -79,9 +74,8 @@ def index():
                          upcoming_tasks=upcoming_tasks,
                          fish_held=fish_held,
                          fish_planned=fish_planned,
-                         tiles=tiles,
+                         tile_groups=tile_groups,
                          fmt_target=fmt_target,
-                         last_bubble_age=last_bubble_age,
                          next_task=next_task))
     resp.set_cookie(TANK_COOKIE, str(selected_aquarium.id), max_age=365 * 86400, samesite='Lax')
     return resp
@@ -107,6 +101,21 @@ def parse_code(raw, aquarium_id=None):
     if taken:
         raise ValueError(f'Code {code} is already used by {taken.name}')
     return code
+
+def parse_window(on, off):
+    """('04:45', '13:45') -> (time, time); both blank -> (None, None). Raises ValueError."""
+    on, off = (on or '').strip(), (off or '').strip()
+    if not on and not off:
+        return None, None
+    if not on or not off:
+        raise ValueError('CO2 window needs both an on and an off time (or neither)')
+    try:
+        on_t, off_t = time.fromisoformat(on), time.fromisoformat(off)
+    except ValueError:
+        raise ValueError('CO2 times must be HH:MM')
+    if on_t == off_t:
+        raise ValueError('CO2 on and off times are the same')
+    return on_t.replace(second=0, microsecond=0), off_t.replace(second=0, microsecond=0)
 
 def _bad(msg, redirect_to='dashboard.manage_aquariums'):
     if request.is_json:
@@ -217,6 +226,11 @@ def edit_aquarium(aquarium_id):
             return redirect(url_for('dashboard.manage_aquariums'))
     if 'description' in data:
         aquarium.description = (data.get('description') or '').strip() or None
+    if 'co2_on' in data or 'co2_off' in data:
+        try:
+            aquarium.co2_on, aquarium.co2_off = parse_window(data.get('co2_on'), data.get('co2_off'))
+        except ValueError as e:
+            return _bad(str(e))
     if 'sort_order' in data:
         try:
             aquarium.sort_order = parse_number(data.get('sort_order'), cast=int, default=aquarium.sort_order)
