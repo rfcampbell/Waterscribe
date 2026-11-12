@@ -332,7 +332,11 @@
     {% block scripts %}{% endblock %}
     <script>
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register({{ url_for('static', filename='sw.js')|tojson }});
+        // the old worker lived in the static folder, so its scope covered no page: drop any such registration
+        navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => {
+            if (new URL(r.scope).pathname !== '/') r.unregister();
+        }));
+        navigator.serviceWorker.register({{ url_for('service_worker')|tojson }}, { scope: '/', updateViaCache: 'none' });
     }
     </script>
 </body>

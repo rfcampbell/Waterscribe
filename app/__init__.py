@@ -40,6 +40,14 @@ def create_app(config_name='default'):
         if endpoint == 'static' and 'filename' in values and 'v' not in values:
             values['v'] = static_hash(app.static_folder, values['filename'])
 
+    # Service worker: fixed URL, never cached, scope /. Not under /static, so it gets no ?v=.
+    @app.route('/sw.js')
+    def service_worker():
+        from flask import Response
+        with open(os.path.join(app.root_path, 'sw.js')) as f:
+            js = f.read().replace('__BUILD__', static_build(app.static_folder))
+        return Response(js, mimetype='text/javascript', headers={'Cache-Control': 'no-cache'})
+
     # the PWA manifest names its icons, so it is served from here with versioned icon URLs
     @app.route('/manifest.webmanifest')
     def manifest():
@@ -78,3 +86,13 @@ def static_hash(folder, filename):
         with open(path, 'rb') as f:
             _hashes[key] = hashlib.sha256(f.read()).hexdigest()[:10]
     return _hashes[key]
+
+
+def static_build(folder):
+    """One hash over every /static file's path and content hash: changes when any asset does."""
+    h = hashlib.sha256()
+    for d, _, files in sorted(os.walk(folder)):
+        for f in sorted(files):
+            rel = os.path.relpath(os.path.join(d, f), folder)
+            h.update(f'{rel}={static_hash(folder, rel)}\n'.encode())
+    return h.hexdigest()[:10]

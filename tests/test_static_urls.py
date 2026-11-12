@@ -7,7 +7,7 @@ from pathlib import Path
 import unittest
 from urllib.parse import urlparse, parse_qs
 
-from app import create_app, static_hash
+from app import create_app, static_hash, static_build
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -32,7 +32,7 @@ class StaticUrls(unittest.TestCase):
     def test_url_for_static_is_versioned_by_content(self):
         with self.app.test_request_context():
             from flask import url_for
-            for f in ('js/mainchart.js', 'favicon.ico', 'sw.js', 'icons/icon-192.png'):
+            for f in ('js/mainchart.js', 'favicon.ico', 'icons/icon-192.png'):
                 with self.subTest(f):
                     u = urlparse(url_for('static', filename=f))
                     v = parse_qs(u.query).get('v', [''])[0]
@@ -49,6 +49,33 @@ class StaticUrls(unittest.TestCase):
             Path(p).write_text('two')
             self.assertNotEqual(static_hash(d, 'a.js'), h1)
             self.assertEqual(static_hash(d, 'missing.js'), '0')
+
+    def test_service_worker_fixed_url_no_cache(self):
+        with self.app.test_request_context():
+            from flask import url_for
+            self.assertEqual(url_for('service_worker'), '/sw.js')     # never versioned
+        self.assertFalse(os.path.exists(os.path.join(self.app.static_folder, 'sw.js')))
+        r = self.app.test_client().get('/sw.js')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.mimetype, 'text/javascript')
+        self.assertEqual(r.headers['Cache-Control'], 'no-cache')
+        js = r.get_data(as_text=True)
+        self.assertNotIn('__BUILD__', js)
+        self.assertRegex(js, r"const BUILD = '%s';" % static_build(self.app.static_folder))
+
+    def test_build_follows_any_static_change(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, 'js').mkdir()
+            Path(d, 'js', 'a.js').write_text('one')
+            Path(d, 'b.png').write_bytes(b'x')
+            b1 = static_build(d)
+            self.assertRegex(b1, r'^[0-9a-f]{10}$')
+            self.assertEqual(static_build(d), b1)
+            Path(d, 'js', 'a.js').write_text('two')
+            b2 = static_build(d)
+            self.assertNotEqual(b2, b1)
+            Path(d, 'c.css').write_text('new file')
+            self.assertNotEqual(static_build(d), b2)
 
     def test_manifest_icons_versioned(self):
         r = self.app.test_client().get('/manifest.webmanifest')

@@ -1,8 +1,11 @@
-"""No /static asset without a version, checked through nginx (Playwright, dev venv only):
+"""No /static asset without a version, and the right cache headers, checked through nginx
+(Playwright, dev venv only):
     .venv-dev/bin/python tests/ui_static_check.py https://waterscribe.robix
-Loads every tank page and Manage, opens each tab and the entry drawer, lets the page register its
-service worker, and records every /static request plus every /static URL in the HTML and the manifest.
-Each must carry ?v=<10 hex> and load 200. Read-only: non-GET requests are blocked."""
+    .venv-dev/bin/python tests/ui_static_check.py http://127.0.0.1:5055 --no-headers   # preview, no nginx
+Loads every tank page and Manage, opens each tab and the entry drawer, and records every /static
+request plus every /static URL in the HTML and the manifest. Each must carry ?v=<10 hex> and load 200.
+Headers: versioned /static immutable for a year, the same path unversioned short-lived, /sw.js and
+the manifest no-cache. Read-only: non-GET requests are blocked."""
 import re
 import sys
 from urllib.parse import urlparse, parse_qs, urljoin
@@ -10,6 +13,8 @@ from urllib.parse import urlparse, parse_qs, urljoin
 from playwright.sync_api import sync_playwright
 
 base = sys.argv[1].rstrip('/')
+headers = '--no-headers' not in sys.argv
+IMMUTABLE = 'public, max-age=31536000, immutable'
 VERSION = re.compile(r'^[0-9a-f]{10}$')
 failures, seen = [], {}
 
@@ -53,11 +58,9 @@ with sync_playwright() as p:
                 note(attr, 'linked')
             for m in re.findall(r'/static/[^"\'\s<>)]*', page.content()):
                 note(m.replace('&amp;', '&'), 'in page')
-        # registration needs a trusted certificate, which robix's mkcert CA isn't to headless Chromium;
-        # the register() call still fetches the script, which is what gets checked
         sw = page.evaluate("navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(rs => rs.map(r => (r.active || r.installing || r.waiting || {}).scriptURL)) : []")
         for u in sw:
-            note(u, 'service worker')
+            check(f'{label}: service worker at the fixed /sw.js', urlparse(u).path == '/sw.js' and not urlparse(u).query, u)
         man = page.locator('link[rel=manifest]').get_attribute('href')
         r = page.request.get(urljoin(base + '/', man))
         check(f'{label}: manifest served', r.ok and 'manifest' in r.headers.get('content-type', ''), f'{man} {r.status}')
@@ -77,12 +80,21 @@ with sync_playwright() as p:
     check('no /static URL without ?v=<hash>', seen and not unversioned, f'{len(seen)} URLs' if not unversioned else ', '.join(unversioned))
     check('every versioned URL loads through nginx', all(ctx.request.get(base + u).ok for u in seen))
     kinds = {h for hs in seen.values() for h in hs}
-    # the page only registers its service worker on a secure origin (https, or localhost)
-    secure = base.startswith('https://') or urlparse(base).hostname in ('127.0.0.1', 'localhost')
-    sw_script = [u for u, hs in seen.items() if urlparse(u).path == '/static/sw.js' and ('requested' in hs or not secure)]
-    check('covered requests, links, manifest icons and the service worker script',
-          {'requested', 'linked', 'manifest icon'} <= kinds and sw_script,
-          f"{sorted(kinds)}; sw.js {'requested' if secure else 'in page (http: not registered)'}: {sw_script}")
+    check('covered requests, links and manifest icons', {'requested', 'linked', 'manifest icon'} <= kinds, str(sorted(kinds)))
+    check('service worker is not a /static asset', not any(urlparse(u).path.endswith('sw.js') for u in seen))
+    if headers:
+        cc = lambda u: ctx.request.get(base + u).headers.get('cache-control', '')
+        bad = {u: cc(u) for u in seen if cc(u) != IMMUTABLE}
+        check(f'versioned /static: {IMMUTABLE}', not bad, str(bad))
+        short = {}
+        for path in {urlparse(u).path for u in seen}:
+            v = cc(path)
+            m = re.search(r'max-age=(\d+)', v)
+            if 'immutable' in v or not m or int(m.group(1)) > 3600:
+                short[path] = v
+        check('unversioned /static: short max-age, not immutable', not short, str(short) if short else cc(urlparse(next(iter(seen))).path))
+        for path in ('/sw.js', '/manifest.webmanifest'):
+            check(f'{path}: no-cache', cc(path) == 'no-cache', cc(path))
     b.close()
 
 print('FAILED: ' + ', '.join(failures) if failures else 'ALL PASSED')
