@@ -29,5 +29,13 @@ def create_app(config_name='default'):
     @app.context_processor
     def inject_config():
         return dict(config=app.config)
-    
+
+    # Pages are rendered per request: make browsers and the iOS web view revalidate instead of
+    # showing a stale copy after a deploy (static files keep nginx's long expiry)
+    @app.after_request
+    def no_stale_pages(resp):
+        if resp.mimetype == 'text/html':
+            resp.headers.setdefault('Cache-Control', 'no-cache')
+        return resp
+
     return app
