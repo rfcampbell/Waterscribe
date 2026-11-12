@@ -8,7 +8,7 @@ from flask import render_template, redirect, url_for, flash, request, jsonify, m
 
 from app.dashboard import bp
 from app.models import db, Aquarium, Reading, Event, ScheduledTask, FishInventory
-from app.catalog import PARAMETERS, EVENT_TYPES, QUALITIES, TARGET_KEYS, TARGET_RANGES, TILE_GROUPS
+from app.catalog import PARAMETERS, EVENT_TYPES, QUALITIES, TARGET_KEYS, TARGET_RANGES, TILE_GROUPS, SUMMARY_LABELS
 from app.api.routes import latest_readings
 from app.overview import build_tiles, fmt_target, method_suggestions
 from app.targets import save_targets, targets_for
@@ -68,6 +68,7 @@ def index():
                          methods=methods,
                          tank_methods=tank_methods,
                          summary_order=[k for g in TILE_GROUPS for k in g if k in PARAMETERS],
+                         summary_labels={k: (v, TARGET_KEYS[k]) for k, v in SUMMARY_LABELS.items()},
                          parameters=PARAMETERS,
                          event_types=EVENT_TYPES,
                          qualities=QUALITIES,

@@ -138,7 +138,7 @@
     .log-day.open .day-chev { transform: rotate(90deg); }
     .day-date { color: var(--seafoam); font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
     .day-sum { font-size: 0.8rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .day-sum .k { color: var(--log-param); } .day-sum .kv { color: var(--log-value); font-family: 'Space Mono', monospace; font-size: 0.76rem; }
+    .day-sum .kp { white-space: nowrap; } .day-sum .k { color: var(--log-param); } .day-sum .kv { color: var(--log-value); font-family: 'Space Mono', monospace; font-size: 0.76rem; }
     .day-warn { color: var(--sand); font-size: 0.78rem; white-space: nowrap; margin-left: auto; flex-shrink: 0; }
     .log-day .ltable { margin-top: 2px; }
     @media (prefers-reduced-motion: reduce) { .day-chev { transition: none; } }
@@ -1276,8 +1276,7 @@
     }
     // Days collapse; which ones are open is remembered per tank for this browser session only
     const SUMMARY_ORDER = {{ summary_order|tojson }};   // tile order: EC, nitrate, ... pH
-    const SHORT = { ec: 'EC', nitrate: 'NO3', phosphate: 'PO4', potassium: 'K', iron: 'Fe', kh: 'KH', gh: 'GH',
-        ammonia: 'NH3', nitrite: 'NO2', tds: 'TDS', temperature: 'Temp', ph: 'pH', ph_degassed: 'dpH' };
+    const SHORT = {{ summary_labels|tojson }};   // key: [short, tile label]; from catalog.SUMMARY_LABELS
     const OPEN_KEY = `waterscribe.openDays.${currentAquariumId}`;
     let openDays = new Set();
     try { openDays = new Set(JSON.parse(sessionStorage.getItem(OPEN_KEY)) || []); } catch (e) { /* no storage: all start collapsed */ }
@@ -1292,7 +1291,7 @@
         const last = {};   // a day's last non-bad value per parameter (rows are in time order)
         readings.forEach(r => { if (r.quality !== 'bad') last[r.parameter] = r; });
         const keys = [...SUMMARY_ORDER, ...PARAM_ORDER.filter(k => !SUMMARY_ORDER.includes(k))]
-            .filter(k => last[k]).map(k => `<span class="k">${esc(SHORT[k] || pname(k))}</span> <span class="kv">${num(last[k].value)}</span>`);
+            .filter(k => last[k]).map(k => `<span class="kp"><span class="k" title="${esc(SHORT[k] ? SHORT[k][1] : pname(k))}">${esc(SHORT[k] ? SHORT[k][0] : pname(k))}</span> <span class="kv">${num(last[k].value)}</span></span>`);
         const warn = readings.filter(r => r.quality !== 'ok').length;
         return { text: [...parts.map(esc), ...keys].join(' · '), warn };
     }

@@ -111,6 +111,13 @@ CO2_DROP_LABEL = 'CO2 pH drop'
 # A water change at least this big (%) resets the CO2 drop's degassed reference: KH changes, so a
 # degassed sample from before it no longer applies. A change with no % recorded also counts.
 WC_RESETS_DEGASSED_PCT = 20
+# Short labels for the log's collapsed-day summaries. Each stands for its tile's label (tooltip shows
+# the full one). "pH dg" is degassed pH; "ΔpH" is reserved for the derived CO2 drop.
+SUMMARY_LABELS = {
+    'ec': 'EC', 'nitrate': 'NO3', 'phosphate': 'PO4', 'potassium': 'K', 'iron': 'Fe',
+    'kh': 'KH', 'gh': 'GH', 'ammonia': 'NH3', 'nitrite': 'NO2', 'tds': 'TDS', 'temperature': 'Temp',
+    'ph': 'pH', CO2_DROP: 'ΔpH', 'ph_degassed': 'pH dg',
+}
 TARGET_KEYS = {**{k: p[0] for k, p in PARAMETERS.items()}, CO2_DROP: CO2_DROP_LABEL}
 TARGET_RANGES = {**RANGES, CO2_DROP: (0, 3)}   # plausibility for target min/max
 

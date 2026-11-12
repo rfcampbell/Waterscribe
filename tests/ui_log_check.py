@@ -113,6 +113,21 @@ def run(p, label, viewport, mobile):
     print(f'      e.g. {first}')
     has_keys = page.evaluate("[...document.querySelectorAll('.day-sum .k')].length > 0")
     check('summaries show key values inline', has_keys)
+    # summary labels stand for the tiles: hover title is the tile's label; degassed pH is "pH dg", never "dpH"
+    lab = page.evaluate("""(() => {
+        const tiles = Object.fromEntries([...document.querySelectorAll('#tiles .tile')].map(t => [t.dataset.key, t.querySelector('.tile-label').textContent.trim()]));
+        const ks = [...document.querySelectorAll('.day-sum .k')].map(k => [k.textContent, k.title]);
+        return { tiles, used: [...new Map(ks).entries()] };
+    })()""")
+    tile_labels = set(lab['tiles'].values())
+    stray = [u for u in lab['used'] if u[1] not in tile_labels]
+    check('every summary label is titled with a tile label', lab['used'] and not stray, str(lab['used']) if not stray else str(stray))
+    split = page.evaluate("""[...document.querySelectorAll('.day-sum .kp')].filter(e => e.getClientRects().length > 1).map(e => e.textContent)""")
+    check('label and value never split across lines', not split, str(split[:3]))
+    shorts = dict(lab['used'])
+    check('no "dpH" label; degassed pH reads "pH dg"', 'dpH' not in shorts and
+          ('pH dg' not in shorts or shorts['pH dg'] == lab['tiles'].get('ph_degassed')),
+          f"pH dg -> {shorts.get('pH dg')!r}" if 'pH dg' in shorts else 'no degassed pH on these days')
     shot('log-collapsed')
 
     # toggle one, reload: remembered for the session; a new session starts collapsed
