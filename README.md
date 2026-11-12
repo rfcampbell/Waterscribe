@@ -33,7 +33,7 @@ The UI features a dark ocean theme with animated bubbles, gradient accents, and 
 - **Backend:** Python 3 / Flask / SQLAlchemy / PostgreSQL
 - **Frontend:** Vanilla HTML/CSS/JS / Chart.js (pinned to 4.6.1 in `base.html`)
 - **Deployment:** Gunicorn + Nginx + systemd
-- **PWA:** Service worker + Web App Manifest
+- **PWA:** Service worker + Web App Manifest (served at `/manifest.webmanifest`)
 
 ## Quick Start
 
@@ -140,10 +140,12 @@ python3 -m venv .venv-dev
 .venv-dev/bin/python tests/ui_drawer_check.py http://127.0.0.1:5055 --tank 4 --other 5 [--shots DIR]
 .venv-dev/bin/python tests/ui_log_check.py http://127.0.0.1:5055 --tank 4 [--shots DIR]
 .venv-dev/bin/python tests/ui_tiles_chart_check.py http://127.0.0.1:5055 --tank 4 [--shots DIR]
+.venv-dev/bin/python tests/ui_static_check.py https://waterscribe.robix   # through nginx, after a deploy
 ```
 
 `ui_tiles_chart_check.py` checks the tile grid at 1920, 1280 and iPhone widths: one grid in `TILE_GROUPS` order, full rows, 210px minimum or 2 columns, each tile's group accent and its 3:1 contrast against the tile. For the chart it answers one `/series` request with the real data plus injected outliers (suspect high and low, bad high) and a wide target. It then checks the scale, the edge pinning, the marker pixels and the tooltips, with *show bad readings* off and on. It is read-only.
 
+**Static assets are versioned.** nginx serves `/static` with a 30-day expiry, so every static URL carries a hash of the file's content: `/static/js/mainchart.js?v=a602bdcfc0`. An `url_defaults` hook in `app/__init__.py` adds it to every `url_for('static', ...)`, and a deploy that changes a file changes its URL. Never write a `/static/...` path by hand; `tests/test_static_urls.py` fails if a template or our JS does. The PWA manifest names its icons, so it is served by the app at `/manifest.webmanifest` from `app/manifest.json`, with versioned icon URLs and `no-cache`. `ui_static_check.py` loads every tank page and Manage, opens each tab and the drawer, and records every `/static` request, every `/static` link in the HTML, the manifest's icons and the service worker script. It fails if any lacks `?v=` or doesn't load. Against robix's mkcert certificate, headless Chromium fetches `sw.js` but doesn't register it, so the check covers the script request rather than a registration.
 
 `ui_log_check.py` covers the log: days start collapsed, summaries match their rows and follow the filter, session memory, Expand/Collapse all, the entry form existing only in the drawer, page order, and measured AA contrast of every visible log text. It is read-only. `ui_drawer_check.py` drives the entry drawer at desktop and iPhone sizes: prefill, closing keeps the draft,
 every way off the page warns, a draft can't save to or show up in another tank, and back doesn't restore a

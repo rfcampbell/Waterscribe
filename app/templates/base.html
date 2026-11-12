@@ -7,9 +7,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="WaterScribe">
     <meta name="theme-color" content="#0a1628">
-    <link rel="manifest" href="/static/manifest.json">
-    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+    <link rel="manifest" href="{{ url_for('manifest') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
     <title>{% if title %}{{ title }} - {% endif %}WaterScribe</title>
     
     <!-- Fonts -->
@@ -332,7 +332,7 @@
     {% block scripts %}{% endblock %}
     <script>
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/static/sw.js');
+        navigator.serviceWorker.register({{ url_for('static', filename='sw.js')|tojson }});
     }
     </script>
 </body>

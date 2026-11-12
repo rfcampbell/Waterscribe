@@ -769,7 +769,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ static_v('js/mainchart.js') }}"></script>
+<script src="{{ url_for('static', filename='js/mainchart.js') }}"></script>
 <script>
     let chart = null;
     const currentAquariumId = {{ selected_aquarium.id }};

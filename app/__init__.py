@@ -1,6 +1,9 @@
 """
 Flask application factory for WaterScribe
 """
+import hashlib
+import os
+
 from flask import Flask
 from flask_migrate import Migrate
 
@@ -28,17 +31,26 @@ def create_app(config_name='default'):
     # Context processors
     @app.context_processor
     def inject_config():
-        return dict(config=app.config, static_v=static_v)
+        return dict(config=app.config)
 
-    # nginx serves /static with a 30-day expiry, so app JS carries its mtime: a deploy changes the URL
-    def static_v(filename):
-        import os
-        from flask import url_for
-        try:
-            v = int(os.path.getmtime(os.path.join(app.static_folder, filename)))
-        except OSError:
-            v = 0
-        return url_for('static', filename=filename, v=v)
+    # nginx serves /static with a 30-day expiry, so every url_for('static', ...) carries a hash of the
+    # file's content: a deploy that changes a file changes its URL. Nothing may link /static by hand.
+    @app.url_defaults
+    def version_static(endpoint, values):
+        if endpoint == 'static' and 'filename' in values and 'v' not in values:
+            values['v'] = static_hash(app.static_folder, values['filename'])
+
+    # the PWA manifest names its icons, so it is served from here with versioned icon URLs
+    @app.route('/manifest.webmanifest')
+    def manifest():
+        import json
+        from flask import url_for, Response
+        with open(os.path.join(app.root_path, 'manifest.json')) as f:
+            m = json.load(f)
+        for icon in m.get('icons', []):
+            icon['src'] = url_for('static', filename=icon['src'])
+        return Response(json.dumps(m, indent=2), mimetype='application/manifest+json',
+                        headers={'Cache-Control': 'no-cache'})
 
     # Pages are rendered per request: make browsers and the iOS web view revalidate instead of
     # showing a stale copy after a deploy (static files keep nginx's long expiry)
@@ -49,3 +61,20 @@ def create_app(config_name='default'):
         return resp
 
     return app
+
+
+_hashes = {}
+
+
+def static_hash(folder, filename):
+    """First 10 hex of the file's sha256, cached until its mtime or size changes; '0' if missing."""
+    path = os.path.join(folder, filename)
+    try:
+        st = os.stat(path)
+    except OSError:
+        return '0'
+    key = (path, st.st_mtime_ns, st.st_size)
+    if key not in _hashes:
+        with open(path, 'rb') as f:
+            _hashes[key] = hashlib.sha256(f.read()).hexdigest()[:10]
+    return _hashes[key]
