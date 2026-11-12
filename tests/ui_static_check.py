@@ -77,9 +77,12 @@ with sync_playwright() as p:
     check('no /static URL without ?v=<hash>', seen and not unversioned, f'{len(seen)} URLs' if not unversioned else ', '.join(unversioned))
     check('every versioned URL loads through nginx', all(ctx.request.get(base + u).ok for u in seen))
     kinds = {h for hs in seen.values() for h in hs}
-    sw_script = [u for u, hs in seen.items() if urlparse(u).path == '/static/sw.js' and 'requested' in hs]
+    # the page only registers its service worker on a secure origin (https, or localhost)
+    secure = base.startswith('https://') or urlparse(base).hostname in ('127.0.0.1', 'localhost')
+    sw_script = [u for u, hs in seen.items() if urlparse(u).path == '/static/sw.js' and ('requested' in hs or not secure)]
     check('covered requests, links, manifest icons and the service worker script',
-          {'requested', 'linked', 'manifest icon'} <= kinds and sw_script, f"{sorted(kinds)}; sw.js requested: {sw_script}")
+          {'requested', 'linked', 'manifest icon'} <= kinds and sw_script,
+          f"{sorted(kinds)}; sw.js {'requested' if secure else 'in page (http: not registered)'}: {sw_script}")
     b.close()
 
 print('FAILED: ' + ', '.join(failures) if failures else 'ALL PASSED')
