@@ -48,7 +48,7 @@
     .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-bottom: 18px;
              --grp-nutrients: #8bd17c; --grp-hardness: #6ea8fe; --grp-co2: #b39dfa; }
     .tile {
-        display: flex; flex-direction: column; gap: 3px; text-align: left; min-width: 0;
+        display: flex; flex-direction: column; gap: 3px; text-align: left; min-width: 0; overflow: hidden;
         padding: 10px 12px 8px; border-radius: 12px; cursor: pointer; font: inherit; color: var(--pearl);
         background-color: rgba(240, 244, 248, 0.05); border: 1px solid rgba(240, 244, 248, 0.1);
         background-image: linear-gradient(var(--grp, transparent) 0 0); background-size: 100% 3px; background-repeat: no-repeat;
@@ -62,14 +62,15 @@
     .tile-head { display: flex; justify-content: space-between; gap: 6px; font-size: 0.76rem; }
     .tile-label { opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tile-age { opacity: 0.6; white-space: nowrap; }
-    .tile-sub.pairing { white-space: normal; line-height: 1.3; }
     .tile-value { font-size: 1.6rem; font-weight: 700; line-height: 1.1; color: var(--pearl); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tile.band-in .tile-value { color: var(--seafoam); }
     .tile.band-out .tile-value { color: var(--coral); }
     .tile-unit { font-size: 0.75rem; font-weight: 400; opacity: 0.65; margin-left: 4px; }
     .tile-range { font-size: 0.75rem; font-weight: 400; opacity: 0.6; margin-left: 4px; }
     .tile-suspect { font-size: 0.85rem; color: var(--sand); margin-left: 5px; vertical-align: 4px; }
-    .tile-sub { font-size: 0.72rem; opacity: 0.55; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1em; }
+    /* detail lines (method, event note, CO2 pairing): wrap, clamp to 2 lines; full text in title */
+    .tile-sub { font-size: 0.72rem; opacity: 0.55; line-height: 1.3; min-height: 1em; overflow: hidden; overflow-wrap: anywhere;
+                display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
     .tile-target { font-size: 0.68rem; opacity: 0.55; }
     .tile.stale { opacity: 0.55; }
     .tile.stale .tile-age { color: var(--sand); opacity: 1; }
@@ -81,7 +82,7 @@
     .tile.band-out .spark-line, .tile.band-out .spark-dot { stroke: var(--coral); }
     .tile.band-out .spark-band { fill: rgba(255, 107, 157, 0.14); }
     .spark-dot.suspect, .tile.band-out .spark-dot.suspect { stroke: var(--sand); }
-    .tile-message { font-size: 1rem; font-weight: 600; color: var(--sand); white-space: normal; padding: 4px 0 2px; }
+    .tile-message { font-size: 1rem; font-weight: 600; color: var(--sand); white-space: normal; overflow-wrap: anywhere; padding: 4px 0 2px; }
 
     .main-chart {
         background: rgba(240, 244, 248, 0.04); border: 1px solid rgba(240, 244, 248, 0.1); border-radius: 14px;
@@ -102,7 +103,7 @@
     .mc-tip {
         position: absolute; top: 4px; z-index: 2; pointer-events: none; max-width: 240px; min-width: 150px;
         background: rgba(10, 22, 40, 0.94); border: 1px solid rgba(78, 205, 196, 0.45); border-radius: 8px;
-        padding: 7px 9px; font-size: 0.8rem; line-height: 1.35; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+        padding: 7px 9px; font-size: 0.8rem; line-height: 1.35; overflow-wrap: anywhere; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
     }
     .mc-tip .tt-when { opacity: 0.7; font-size: 0.75rem; }
     .mc-tip .tt-val { font-size: 1.05rem; font-weight: 700; }
@@ -514,9 +515,11 @@
         <div class="tile-head"><span class="tile-label">{{ t.label }}</span></div>
         <div class="tile-value tile-message">{{ t.message }}</div>
         {% if t.blocking_wc %}
-        <div class="tile-sub pairing">{{ '%g' % t.blocking_wc.value ~ '% ' if t.blocking_wc.value is not none }}water change {{ when(t.blocking_wc) }}; latest degassed pH is older</div>
+        {% set sub %}{{ '%g' % t.blocking_wc.value ~ '% ' if t.blocking_wc.value is not none }}water change {{ when(t.blocking_wc) }}; latest degassed pH is older{% endset %}
+        <div class="tile-sub pairing" title="{{ sub }}">{{ sub }}</div>
         {% else %}
-        <div class="tile-sub pairing">needs a pH taken {{ t.window[0].strftime('%H:%M') }}–{{ t.window[1].strftime('%H:%M') }} in the last 2 d and a degassed pH in the last 14 d</div>
+        {% set sub %}needs a pH taken {{ t.window[0].strftime('%H:%M') }}–{{ t.window[1].strftime('%H:%M') }} in the last 2 d and a degassed pH in the last 14 d{% endset %}
+        <div class="tile-sub pairing" title="{{ sub }}">{{ sub }}</div>
         {% endif %}
         {% if t.spark %}{{ spark_svg(t.spark) }}{% endif %}
         {% if t.target %}<div class="tile-target">target {{ fmt_target(t.target) }}</div>{% endif %}
@@ -528,9 +531,10 @@
         <div class="tile-value">{{ '%g' % t.value }}{% if t.unit %}<span class="tile-unit">{{ t.unit }}</span>{% endif %}{% if t.suspect %}<span class="tile-suspect" aria-label="suspect">⚠</span>{% endif %}
             {% if t.value_min is not none or t.value_max is not none %}<span class="tile-range">({{ '%g' % t.value_min if t.value_min is not none else '' }}–{{ '%g' % t.value_max if t.value_max is not none else '' }})</span>{% endif %}</div>
         {% if t.pairing %}
-        <div class="tile-sub pairing">degassed {{ '%g' % t.pairing.degassed.value }} · {{ when(t.pairing.degassed) }}<br>in tank {{ '%g' % t.pairing.tank.value }} · {{ when(t.pairing.tank) }}</div>
+        {% set dg %}degassed {{ '%g' % t.pairing.degassed.value }} · {{ when(t.pairing.degassed) }}{% endset %}{% set tk %}in tank {{ '%g' % t.pairing.tank.value }} · {{ when(t.pairing.tank) }}{% endset %}
+        <div class="tile-sub pairing" title="{{ dg }}; {{ tk }}">{{ dg }}<br>{{ tk }}</div>
         {% else %}
-        <div class="tile-sub">{{ t.method or ' ' }}</div>
+        <div class="tile-sub"{% if t.method %} title="{{ t.method }}"{% endif %}>{{ t.method or ' ' }}</div>
         {% endif %}
         {% if t.spark %}{{ spark_svg(t.spark) }}{% elif not t.bubble %}<div class="spark spark-empty">nothing in 30 d</div>{% endif %}
         {% if t.target %}<div class="tile-target">target {{ fmt_target(t.target) }}</div>{% endif %}
