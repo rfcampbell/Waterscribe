@@ -52,11 +52,20 @@ GEOM_JS = """() => {
     for (const t of grid.querySelectorAll('.tile')) {
         const r = t.getBoundingClientRect();
         if (Math.abs(r.width - cols[0]) > 1) out.push(`${t.dataset.key}: tile ${r.width.toFixed(0)}px vs column ${cols[0].toFixed(0)}px`);
-        // a clipped child still has its full box; what renders is the part inside every clipping ancestor
-        for (const e of t.querySelectorAll('*')) {
-            let b = e.getBoundingClientRect(); if (!b.width || !b.height) continue;
+        // Measure element boxes AND the glyphs of every text node: text overflowing its own box is not
+        // an element, so element boxes alone miss it. What renders is the part inside every clipping ancestor.
+        const items = [];
+        for (const e of t.querySelectorAll('*')) items.push([e, [e.getBoundingClientRect()], e]);
+        const w = document.createTreeWalker(t, NodeFilter.SHOW_TEXT);
+        for (let n; (n = w.nextNode());) {
+            if (!n.textContent.trim()) continue;
+            const rg = document.createRange(); rg.selectNodeContents(n);
+            items.push([n, [...rg.getClientRects()], n.parentElement]);
+        }
+        for (const [node, rects, from] of items) for (const b of rects) {
+            if (!b.width || !b.height) continue;
             let box = { l: b.left, r: b.right, t: b.top, b: b.bottom };
-            for (let a = e.parentElement; a && a !== t.parentElement; a = a.parentElement) {
+            for (let a = node === from ? from.parentElement : from; a && a !== t.parentElement; a = a.parentElement) {
                 const cs = getComputedStyle(a);
                 if (cs.overflowX !== 'visible' || cs.overflowY !== 'visible') {
                     const c = a.getBoundingClientRect();
@@ -64,8 +73,10 @@ GEOM_JS = """() => {
                 }
             }
             if (box.r <= box.l || box.b <= box.t) continue;
-            if (box.l < r.left - 0.5 || box.r > r.right + 0.5 || box.t < r.top - 0.5 || box.b > r.bottom + 0.5)
-                out.push(`${t.dataset.key}: .${(e.className.baseVal ?? e.className) || e.tagName} renders ${Math.round(Math.max(box.r - r.right, r.left - box.l, box.b - r.bottom))}px outside`);
+            if (box.l < r.left - 0.5 || box.r > r.right + 0.5 || box.t < r.top - 0.5 || box.b > r.bottom + 0.5) {
+                const what = node.nodeType === 3 ? `text in .${from.className}` : `.${(node.className.baseVal ?? node.className) || node.tagName}`;
+                out.push(`${t.dataset.key}: ${what} renders ${Math.round(Math.max(box.r - r.right, r.left - box.l, box.b - r.bottom))}px outside`);
+            }
         }
         for (const s of t.querySelectorAll('.tile-sub')) {
             const lh = parseFloat(getComputedStyle(s).lineHeight);
